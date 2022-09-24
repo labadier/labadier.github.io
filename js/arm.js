@@ -50,7 +50,7 @@ function init()
     addLighting(scene)
 
     // Instanciar la camara
-    camera= new THREE.PerspectiveCamera(100,window.innerWidth/window.innerHeight,1,400);
+    camera= new THREE.PerspectiveCamera(100,window.innerWidth/window.innerHeight,1,600);
     // camera.position.set(5, 5, 2);
     camera.position.set(40, 180, 62);
     camera.lookAt(0,1,0);
