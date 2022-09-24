@@ -72,12 +72,6 @@ function init()
 
 function loadScene()
 {
-    // metal_material sencillo
-    // const metal_material = new MeshPhysicalMaterial({
-    //     metalness: 1,
-    //     clearcoat: 1.0,
-    //     envMap: textureCube
-    // });
     const metal_material = new THREE.MeshPhongMaterial({color:'blue', shininess: 100, });
     const material_actual = new THREE.MeshPhongMaterial({color:'red',wireframe:true});
     let floor_texture = new THREE.TextureLoader().load( 'images/suelo.jpg');
@@ -98,15 +92,13 @@ function loadScene()
     const arm_humero = new THREE.Mesh( new THREE.BoxGeometry(18, 120, 12), metal_material );
     const arm_elbow = new THREE.Mesh( new THREE.SphereGeometry(20, 20, 20), metal_material );
     arm_soulder.rotation.z = -Math.PI/2
-    arm_soulder.position.set(1, 13, 0)
-    arm_humero.position.set(0, 13+60, 0)
-    arm_elbow.position.set(0, 13+60*2, 0)
+    arm_humero.position.set(0, 60, 0)
+    arm_elbow.position.set(0, 60*2, 0)
     
     const arm = new THREE.Object3D();
     arm.add(arm_soulder);
     arm.add(arm_humero);
     arm.add(arm_elbow);
-
 
     //forearm
     const arm_elbow2 = new THREE.Mesh( new THREE.CylinderGeometry(22, 22, 6, 100), metal_material );
@@ -115,11 +107,10 @@ function loadScene()
     const nerve_2 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), metal_material );
     const nerve_3 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), metal_material );
 
-    arm_elbow2.position.set(0, 13+60*2, 0)
-    nerve_0.position.set(22*0.5, 13+60*2+40+3, 22*0.5)
-    nerve_1.position.set(-22*0.5, 13+60*2+40+3, 22*0.5)
-    nerve_2.position.set(22*0.5, 13+60*2+40+3, -22*0.5)
-    nerve_3.position.set(-22*0.5, 13+60*2+40+3, -22*0.5)
+    nerve_0.position.set(22*0.5, 40+3, 22*0.5)
+    nerve_1.position.set(-22*0.5, 40+3, 22*0.5)
+    nerve_2.position.set(22*0.5, 40+3, -22*0.5)
+    nerve_3.position.set(-22*0.5, 40+3, -22*0.5)
     
     
     const forearm = new THREE.Object3D();
@@ -132,33 +123,34 @@ function loadScene()
 
     //hand
     const wrist = new THREE.Mesh( new THREE.CylinderGeometry(15, 15, 40, 100), metal_material );
-    wrist.position.y = 13+60*2+80+3
     wrist.rotation.z = -Math.PI/2
 
     // tweezers   
     const tweezer0 = new Tweezers(metal_material)
     const tweezer1 = new Tweezers(metal_material)
     
-    tweezer0.position.set(15, 13+60*2+80+3, 12.5)
+    tweezer0.position.set(15, 0, 12.5)
     tweezer0.rotation.y = -Math.PI/2
-    tweezer1.position.set(-15, 13+60*2+80+3, 12.5)
+    tweezer1.position.set(-15, 0, 12.5)
     tweezer1.rotation.y = -Math.PI/2
     
 
     const hand = new THREE.Object3D();
-    forearm.add(wrist);
-    forearm.add(tweezer0);
-    forearm.add(tweezer1);
+    hand.add(wrist);
+    hand.add(tweezer0);
+    hand.add(tweezer1);
+    hand.position.y = 80
 
     forearm.add(hand)
+    forearm.position.y = 60*2
     arm.add(forearm)
+    arm.position.y = 8.5
 
     robot = new THREE.Object3D();
     robot.add(base);
     robot.add(arm);
-    robot.add(forearm);
-    robot.position.y = 3.8;
-    robot.scale.set(0.5,.5, .5)
+    robot.position.y = 7.8;
+    // robot.scale.set(0.5,.5, .5)
 
     scene.add(robot);
 
