@@ -27,6 +27,16 @@ init();
 loadScene();
 render();
 
+export function addLighting(scene) {
+  let color = 0xFFFFFF;
+  let intensity = 1;
+  let light = new THREE.DirectionalLight(color, intensity);
+  light.position.set(110, 100, 110);
+  light.target.position.set(-5, -2, -5);
+  scene.add(light);
+  scene.add(light.target);
+}
+
 function init()
 {
     // Instanciar el motor de render
@@ -37,6 +47,7 @@ function init()
     // Instanciar el nodo raiz de la escena
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0.5,0.5,0.5);
+    addLighting(scene)
 
     // Instanciar la camara
     camera= new THREE.PerspectiveCamera(100,window.innerWidth/window.innerHeight,1,400);
@@ -61,9 +72,14 @@ function init()
 
 function loadScene()
 {
-    // Material sencillo
-    const material = new THREE.MeshBasicMaterial({color:'yellow',wireframe:true});
-    const material_actual = new THREE.MeshBasicMaterial({color:'red',wireframe:true});
+    // metal_material sencillo
+    // const metal_material = new MeshPhysicalMaterial({
+    //     metalness: 1,
+    //     clearcoat: 1.0,
+    //     envMap: textureCube
+    // });
+    const metal_material = new THREE.MeshPhongMaterial({color:'blue', shininess: 100, });
+    const material_actual = new THREE.MeshPhongMaterial({color:'red',wireframe:true});
     let floor_texture = new THREE.TextureLoader().load( 'images/suelo.jpg');
     floor_texture.wrapS = floor_texture.wrapT = THREE.RepeatWrapping;
     floor_texture.repeat.set(80, 80);
@@ -75,12 +91,12 @@ function loadScene()
     scene.add(suelo);
 
     // base
-    const base = new THREE.Mesh( new THREE.CylinderGeometry(50, 50, 15, 100), material );
+    const base = new THREE.Mesh( new THREE.CylinderGeometry(50, 50, 15, 100), metal_material );
 
     // arm
-    const arm_soulder = new THREE.Mesh( new THREE.CylinderGeometry(20, 20, 15, 100), material );
-    const arm_humero = new THREE.Mesh( new THREE.BoxGeometry(18, 120, 12), material );
-    const arm_elbow = new THREE.Mesh( new THREE.SphereGeometry(20, 20, 20), material );
+    const arm_soulder = new THREE.Mesh( new THREE.CylinderGeometry(20, 20, 15, 100), metal_material );
+    const arm_humero = new THREE.Mesh( new THREE.BoxGeometry(18, 120, 12), metal_material );
+    const arm_elbow = new THREE.Mesh( new THREE.SphereGeometry(20, 20, 20), metal_material );
     arm_soulder.rotation.z = -Math.PI/2
     arm_soulder.position.set(1, 13, 0)
     arm_humero.position.set(0, 13+60, 0)
@@ -93,11 +109,11 @@ function loadScene()
 
 
     //forearm
-    const arm_elbow2 = new THREE.Mesh( new THREE.CylinderGeometry(22, 22, 6, 100), material );
-    const nerve_0 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), material );
-    const nerve_1 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), material );
-    const nerve_2 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), material );
-    const nerve_3 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), material );
+    const arm_elbow2 = new THREE.Mesh( new THREE.CylinderGeometry(22, 22, 6, 100), metal_material );
+    const nerve_0 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), metal_material );
+    const nerve_1 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), metal_material );
+    const nerve_2 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), metal_material );
+    const nerve_3 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), metal_material );
 
     arm_elbow2.position.set(0, 13+60*2, 0)
     nerve_0.position.set(22*0.5, 13+60*2+40+3, 22*0.5)
@@ -115,13 +131,13 @@ function loadScene()
 
 
     //hand
-    const wrist = new THREE.Mesh( new THREE.CylinderGeometry(15, 15, 40, 100), material );
+    const wrist = new THREE.Mesh( new THREE.CylinderGeometry(15, 15, 40, 100), metal_material );
     wrist.position.y = 13+60*2+80+3
     wrist.rotation.z = -Math.PI/2
 
     // tweezers   
-    const tweezer0 = new Tweezers(material)
-    const tweezer1 = new Tweezers(material)
+    const tweezer0 = new Tweezers(metal_material)
+    const tweezer1 = new Tweezers(metal_material)
     
     tweezer0.position.set(15, 13+60*2+80+3, 12.5)
     tweezer0.rotation.y = -Math.PI/2
@@ -147,26 +163,6 @@ function loadScene()
     scene.add(robot);
 
     scene.add( new THREE.AxesHelper(3) );
-
-    // Modelos importados
-    const loader = new THREE.ObjectLoader();
-    loader.load('models/soldado/soldado.json', 
-    function (objeto)
-    {
-        cubo.add(objeto);
-        objeto.position.y = 1;
-    });
-
-    const glloader = new GLTFLoader();
-    glloader.load('models/RobotExpressive.glb',
-    function(objeto)
-    {
-        esfera.add(objeto.scene);
-        objeto.scene.position.y = 1;
-        objeto.scene.rotation.y = -Math.PI/2;
-        console.log("ROBOT");
-        console.log(objeto);
-    });
 }
 
 function update()

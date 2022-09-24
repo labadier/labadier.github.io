@@ -19,6 +19,7 @@ class Tweezers{
     const tweezers_geometry = new THREE.BufferGeometry();
     tweezers_geometry.setIndex( indicesOfTweezers );
     tweezers_geometry.setAttribute( 'position', new THREE.Float32BufferAttribute(tweezersVertices,3));
+    tweezers_geometry.computeVertexNormals() 
     const palm = new THREE.Mesh( new THREE.BoxGeometry(19, 20, 4), material );
     const tweezer = new THREE.Mesh(  tweezers_geometry, material );
     tweezer.rotation.z = -Math.PI/2
