@@ -1,14 +1,3 @@
-/**
- * Escena.js
- * 
- * Seminario GPC#2. Construir una escena básica con transformaciones e
- * importación de modelos.
- * @author <rvivo@upv.es>
- * 
- * 
- */
-
-// Modulos necesarios
 import * as THREE from "../lib/three.module.js";
 import {GLTFLoader} from "../lib/GLTFLoader.module.js";
 import {OrbitControls} from "../lib/OrbitControls.module.js"
@@ -166,7 +155,7 @@ function update()
 function render()
 {
     requestAnimationFrame(render);
-    update();
+    // update();
     controls.update();
     renderer.render(scene,camera);
 }
