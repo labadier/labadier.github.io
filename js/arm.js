@@ -41,7 +41,7 @@ function init()
     // Instanciar la camara
     camera= new THREE.PerspectiveCamera(100,window.innerWidth/window.innerHeight,1,600);
     // camera.position.set(5, 5, 2);
-    camera.position.set(40, 180, 62);
+    camera.position.set(90, 300, 90);
     camera.lookAt(0,1,0);
 
     controls = new OrbitControls( camera, renderer.domElement );
