@@ -71,7 +71,8 @@ function loadScene()
     const suelo = new THREE.Mesh( new THREE.PlaneGeometry(1000,1000), floor_texture );
     suelo.rotation.x = -Math.PI/2;
     scene.add(suelo);
- 
+    
+    const bicho = new THREE.Object3D();
     const loader = new OBJLoader();
     loader.load('models/strawberry/Strawberry.obj', 
     function (objeto)
@@ -84,16 +85,26 @@ function loadScene()
               child.geometry.computeVertexNormals();
           }
       });
-      scene.add(objeto); 
+      bicho.add(objeto); 
     });
- 
+    
+    scene.add(bicho)
     scene.add( new THREE.AxesHelper(3) );
+
+    var lookAtVector = new THREE.Vector3(0,0, -1);
+    lookAtVector.applyQuaternion(camera.quaternion);
+    lookAtVector.y = 4
+    console.log(lookAtVector)
 }
 
 function update()
 {
     angulo += 0.01;
     robot.rotation.y = angulo;
+
+    var lookAtVector = new THREE.Vector3(0,0, -1);
+    console.log()
+    lookAtVector.applyQuaternion(camera.quaternion);
 }
 
 function render()
@@ -101,5 +112,5 @@ function render()
     requestAnimationFrame(render);
     // update();
     controls.update();
-    renderer.render(scene,camera);
+    renderer.render(scene,camera); 
 }
