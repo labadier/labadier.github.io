@@ -5,7 +5,7 @@ import { OrbitControls } from '../node_modules/three/examples/jsm/controls/Orbit
 import {Tweezers} from "./tweezers.js"
 
 // Variables estandara
-let renderer, scene, camera, controls;
+let renderer, scene, camera, controls, bicho;
 
 // Otras globales
 let robot;
@@ -58,6 +58,8 @@ function init()
 
     controls.maxPolarAngle = Math.PI / 2;
 
+    document.addEventListener("keydown", handleKeyboard, false);
+
 }
 
 function loadScene()
@@ -72,7 +74,7 @@ function loadScene()
     suelo.rotation.x = -Math.PI/2;
     scene.add(suelo);
     
-    const bicho = new THREE.Object3D();
+    bicho = new THREE.Object3D();
     const loader = new OBJLoader();
     loader.load('models/strawberry/Strawberry.obj', 
     function (objeto)
@@ -91,20 +93,20 @@ function loadScene()
     scene.add(bicho)
     scene.add( new THREE.AxesHelper(3) );
 
-    var lookAtVector = new THREE.Vector3(0,0, -1);
-    lookAtVector.applyQuaternion(camera.quaternion);
-    lookAtVector.y = 4
-    console.log(lookAtVector)
+}
+
+function handleKeyboard(evento){
+  update()
 }
 
 function update()
 {
-    angulo += 0.01;
-    robot.rotation.y = angulo;
-
-    var lookAtVector = new THREE.Vector3(0,0, -1);
-    console.log()
-    lookAtVector.applyQuaternion(camera.quaternion);
+  var lookAtVector = new THREE.Vector3(0,0, -1);
+  lookAtVector.applyQuaternion(camera.quaternion);
+  lookAtVector.normalize ()
+  lookAtVector.y = 0
+  bicho.position.set(bicho.position.x + lookAtVector.x*2, bicho.position.y, bicho.position.z + lookAtVector.z*2)
+  // bicho.position.set(1, 0, 1)
 }
 
 function render()
