@@ -68,7 +68,7 @@ function init()
     controls.enableDamping = true; 
     controls.dampingFactor = 0.05;
 
-    controls.minDistance = 20;
+    controls.minDistance = 300;
     controls.maxDistance = 500;
     controls.maxPolarAngle = Math.PI / 2;
 
