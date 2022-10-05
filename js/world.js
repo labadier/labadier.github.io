@@ -1,16 +1,19 @@
 import * as THREE from '../node_modules/three/build/three.module.js';
 // import {GLTFLoader} from "./lib/GLTFLoader.module.js";
 import {OBJLoader} from '../node_modules/three/examples/jsm/loaders/OBJLoader.js';
-import { OrbitControls } from '../node_modules/three/examples/jsm/controls/OrbitControls.js';
-import {Tweezers} from "./tweezers.js"
+import { OrbitControls } from '../node_modules/three/examples/jsm/controls/OrbitControls.js'; 
 
 // Variables estandara
-let renderer, scene, camera, controls, bicho;
+let renderer, scene, camera, controls, bicho, goal, keys;
 
 // Otras globales
-let robot;
-let angulo = 0;
+var velocity = 0.0;
+var speed = 0.0;
 
+var dir = new THREE.Vector3;
+var a = new THREE.Vector3;
+var b = new THREE.Vector3;
+var backwalk
 
 // Acciones
 init();
@@ -41,24 +44,36 @@ function init()
 
     // Instanciar la camara
     camera= new THREE.PerspectiveCamera(100,window.innerWidth/window.innerHeight,1,600);
-    camera.position.set(5, 5, 2);
-    // camera.position.set(90, 300, 90);
+    camera.position.set(15, 15, 0);
+    
     camera.lookAt(0,1,0);
+    
+    backwalk = false
+    goal = new THREE.Object3D;
+    goal.position.z = -0.3;
+    goal.add( camera );
 
-    controls = new OrbitControls( camera, renderer.domElement );
-    controls.listenToKeyEvents( window ); // optional
+    keys = {
+      a: false,
+      s: false,
+      d: false,
+      w: false
+    };
 
-    controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
-    controls.dampingFactor = 0.05;
-
-    controls.screenSpacePanning = false;
-
-    controls.minDistance = 20;
-    controls.maxDistance = 500;
-
-    controls.maxPolarAngle = Math.PI / 2;
-
-    document.addEventListener("keydown", handleKeyboard, false);
+    document.body.addEventListener( 'keydown', function(e) {
+    
+      var key = e.code.replace('Key', '').toLowerCase();
+      if ( keys[ key ] !== undefined )
+        keys[ key ] = true;
+      
+    });
+    document.body.addEventListener( 'keyup', function(e) {
+      
+      var key = e.code.replace('Key', '').toLowerCase();
+      if ( keys[ key ] !== undefined )
+        keys[ key ] = false;
+      
+    });
 
 }
 
@@ -90,29 +105,66 @@ function loadScene()
       bicho.add(objeto); 
     });
     
+    bicho.rotateY(-Math.PI/2)
     scene.add(bicho)
     scene.add( new THREE.AxesHelper(3) );
+    console.log(bicho.position, camera.position)
 
 }
-
-function handleKeyboard(evento){
-  update()
-}
+ 
 
 function update()
 {
-  var lookAtVector = new THREE.Vector3(0,0, -1);
-  lookAtVector.applyQuaternion(camera.quaternion);
-  lookAtVector.normalize ()
-  lookAtVector.y = 0
-  bicho.position.set(bicho.position.x + lookAtVector.x*2, bicho.position.y, bicho.position.z + lookAtVector.z*2)
-  // bicho.position.set(1, 0, 1)
+  console.log(camera.position)
+
+  speed = 0.0;
+  
+  if ( keys.w ){
+
+    if(backwalk){
+      bicho.rotateY(Math.PI)
+      backwalk ^= 1
+    }
+    speed = 0.07;
+  }
+  else if ( keys.s ){
+
+    if(!backwalk){
+      bicho.rotateY(Math.PI)
+      backwalk ^= 1
+    }
+    speed = 0.04;
+  }
+  
+  velocity += ( speed - velocity ) * .3;
+  console.log(velocity, speed)
+  bicho.translateZ( velocity );
+
+  if ( keys.a ){
+    bicho.rotateY(0.03);
+    goal.rotateY(0.03)
+  }
+  else if ( keys.d ){
+    bicho.rotateY(-0.03);
+    goal.rotateY(-0.03);
+  }
+
+    
+  a.lerp(bicho.position, 0.4);
+  b.copy(goal.position);
+    
+  dir.copy( a ).sub( b ).normalize();
+  const dis = a.distanceTo( b ) - 0.3;
+  goal.position.addScaledVector( dir, dis );
+  
+  camera.lookAt( bicho.position );
+
 }
 
 function render()
 {
     requestAnimationFrame(render);
-    // update();
-    controls.update();
+    update();
+    
     renderer.render(scene,camera); 
 }
