@@ -7,7 +7,7 @@ import {Tweezers} from "./tweezers.js"
 let renderer, scene, camera, controls;
 
 // Otras globales
-let robot;
+let robot, arm, forearm, hand, tweezer0, tweezer1;
 let angulo = 0;
 
 
@@ -78,13 +78,15 @@ function loadScene()
 
     // arm
     const arm_soulder = new THREE.Mesh( new THREE.CylinderGeometry(20, 20, 15, 100), metal_material );
+    arm_soulder.rotation.set(0, Math.PI/2, Math.PI/2) 
+
     const arm_humero = new THREE.Mesh( new THREE.BoxGeometry(18, 120, 12), metal_material );
     const arm_elbow = new THREE.Mesh( new THREE.SphereGeometry(20, 20, 20), metal_material );
-    arm_soulder.rotation.z = -Math.PI/2
+
     arm_humero.position.set(0, 60, 0)
     arm_elbow.position.set(0, 60*2, 0)
     
-    const arm = new THREE.Object3D();
+    arm = new THREE.Object3D();
     arm.add(arm_soulder);
     arm.add(arm_humero);
     arm.add(arm_elbow);
@@ -102,29 +104,26 @@ function loadScene()
     nerve_3.position.set(-22*0.5, 40+3, -22*0.5)
     
     
-    const forearm = new THREE.Object3D();
+    forearm = new THREE.Object3D();
     forearm.add(arm_elbow2);
     forearm.add(nerve_0);
     forearm.add(nerve_1 );
     forearm.add(nerve_2);
     forearm.add(nerve_3);
 
-
     //hand
     const wrist = new THREE.Mesh( new THREE.CylinderGeometry(15, 15, 40, 100), metal_material );
-    wrist.rotation.z = -Math.PI/2
+    wrist.rotation.x = Math.PI/2
 
     // tweezers   
-    const tweezer0 = new Tweezers(metal_material)
-    const tweezer1 = new Tweezers(metal_material)
-    
-    tweezer0.position.set(15, 0, 12.5)
-    tweezer0.rotation.y = -Math.PI/2
-    tweezer1.position.set(-15, 0, 12.5)
-    tweezer1.rotation.y = -Math.PI/2
+    tweezer0 = new Tweezers(metal_material)
+    tweezer0.position.set(15, 0, 10)
+
+    tweezer1 = tweezer0.clone()
+    tweezer1.position.set(15, 0, -10)
     
 
-    const hand = new THREE.Object3D();
+    hand = new THREE.Object3D();
     hand.add(wrist);
     hand.add(tweezer0);
     hand.add(tweezer1);
@@ -139,7 +138,6 @@ function loadScene()
     robot.add(base);
     robot.add(arm);
     robot.position.y = 7.8;
-    // robot.scale.set(0.5,.5, .5)
 
     scene.add(robot);
 

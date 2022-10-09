@@ -5,25 +5,28 @@ import {GLTFLoader} from '../node_modules/three/examples/jsm/loaders/GLTFLoader.
 import * as SkeletonUtils from '../node_modules/three/examples/jsm/utils/SkeletonUtils.js';
 import { OrbitControls } from '../node_modules/three/examples/jsm/controls/OrbitControls.js'; 
 
-// Variables estandara
-let renderer, scene, camera, bicho, goal, keys, sky;
-let mixers = [], clock, model, clips, isIdle, bicho_actions = {}
-const lim = 2000
-// Otras globales
-var velocity = 0.0;
-var speed = 0.0;
 
-var dir = new THREE.Vector3;
-var a = new THREE.Vector3;
-var b = new THREE.Vector3;
-var backwalk
+let renderer, scene, camera, bicho, goal, keys, sky, coins = [], asteroids = [];
+let mixers = [], clock, clips, isIdle, bicho_actions = {}, trees = []
+const amountreward = 150
+const amounttrees = 20
+const lim = 600, continouosFloor = new Array(3)
+
+// Otras globales
+let velocity = 0.0;
+let speed = 0.0;
+
+let dir = new THREE.Vector3;
+let a = new THREE.Vector3;
+let b = new THREE.Vector3;
+let backwalk, record = 0
 
 // Acciones
 init();
 loadScene();
 render();
 
-export function addLighting(scene) {
+function addLighting(scene) {
   let color = 0xFFFFFF;
   let intensity = 1;
   let light = new THREE.DirectionalLight(color, intensity);
@@ -48,9 +51,9 @@ function init()
     addLighting(scene)
 
     // Instanciar la camara
-    camera= new THREE.PerspectiveCamera(100,window.innerWidth/window.innerHeight,1,650);
-    // camera.position.set(15, 15, 0);
-    camera.position.set(5, 5, 0);
+    camera= new THREE.PerspectiveCamera(100,window.innerWidth/window.innerHeight,1,500);
+    // camera.position.set(0, 20, 0);
+    camera.position.set(5, 5, -1);
     
     camera.lookAt(0,1,0);
     
@@ -80,15 +83,15 @@ function init()
         keys[ key ] = false;
       
     });
-
+  
+  window.addEventListener('resize', updateAspectRatio );
 }
 
 
 function createMaterialArray() {
 
-  
   const skyboxImagepaths = ["ft", "bk", "up", "dn", "rt", "lf"].map(side => {
-      return  "../images/skybox/sh_" + side + '.png';
+      return  "images/skybox/sh_" + side + '.png';
   });
 
   const materialArray = skyboxImagepaths.map(image => {
@@ -99,51 +102,252 @@ function createMaterialArray() {
   return materialArray;
 }
 
-function loadScene()
-{
-    let floor_texture = new THREE.TextureLoader().load( 'images/suelo.jpg');
-    floor_texture.wrapS = floor_texture.wrapT = THREE.RepeatWrapping;
-    floor_texture.repeat.set(8*lim/100, 8*lim/100);
-    floor_texture = new THREE.MeshBasicMaterial({map: floor_texture});
-    // Suelo
-    console.log(lim)
-    const suelo = new THREE.Mesh( new THREE.PlaneGeometry(lim,lim), floor_texture );
-    suelo.rotation.x = -Math.PI/2;
-    scene.add(suelo);
+function createContinuousFloor(){
 
-    var skyGeo = new THREE.BoxGeometry(1200, 1200, 1200, 1, 1,1); 
-    sky = new THREE.Mesh(skyGeo);
-    const skyMaterial = createMaterialArray()
-    sky.material = skyMaterial
+
+  let floor_texture = new THREE.TextureLoader().load( 'images/suelo.jpg');
+  floor_texture.wrapS = floor_texture.wrapT = THREE.RepeatWrapping;
+  floor_texture.repeat.set(8*lim/100, 8*lim/100);
+  floor_texture = new THREE.MeshBasicMaterial({map: floor_texture});
+  
+  console.log(lim)
+
+  for(var i = 0; i < 3; i ++)
+    continouosFloor[i] = new Array(3)
+
+  continouosFloor[1][1] = new THREE.Mesh( new THREE.PlaneGeometry(lim,lim), floor_texture );
+  continouosFloor[1][1].rotation.x = -Math.PI/2;
+  scene.add(continouosFloor[1][1]);
+  
+  const mf = [-1, -1, -1, 0, 0, 1, 1, 1]
+  const mc = [-1, 0, 1, -1, 1, -1, 0, 1]
+
+  // const clsr  = ['yellow', 'yellow', 'red', 'green', 'blue', 'skyblue', 'red', 'green', 'blue', 'yellow', 'red', 'green', 'blue']
+
+  for(var i = 0; i < mf.length; i++){
+
+    const nf = 1 + mf[i];
+    const nc = 1 + mc[i];
+    // const material = new THREE.MeshBasicMaterial({color:clsr[i],wireframe:true});
+    continouosFloor[nf][nc] = continouosFloor[1][1].clone()
+    continouosFloor[nf][nc].position.x = -lim*mf[i]
+    continouosFloor[nf][nc].position.z = lim*mc[i]
+    // if(nf != nc)
+    //   continouosFloor[nf][nc].material = material
     
-    scene.add(sky);
-    
-    bicho = new THREE.Object3D();
+    scene.add(continouosFloor[nf][nc])
+  } 
+  console.log(continouosFloor)
+}
 
-    const loader = new GLTFLoader()
-    loader.load( 'models/hare_animated/scene.gltf', function ( gltf ) {
-        model = SkeletonUtils.clone(gltf.scene) ;
-        const mixer = new THREE.AnimationMixer(model);
-        clips = gltf.animations;
-        
-        const clip = THREE.AnimationClip.findByName(clips, 'Armature|Idle  ');
-        const action = mixer.clipAction(clip);
-        bicho_actions['Armature|Idle  '] = action
-        action.play();
-        mixers.push(mixer);
-        bicho.add(model)
+function getNewRewardPosition ( x, z){
 
-               
+  let nx, nz  
+  [nx, nz] = [x, z]
+
+  const radius = 3
+  while (nx < x + radius && nx > x - radius && nz < z + radius && nz > z - radius){
+    nx = 500 - Math.floor(Math.random() * 1000);
+    nz = 500 - Math.floor(Math.random() * 1000);
+  }
+  
+  return [nx, nz]
+}
+
+function createRewards ( ){
+
+  let model;
+  const loader = new GLTFLoader()
+    loader.load( 'models/carrot/scene.gltf', function ( gltf ) {
+
+        model = gltf.scene
+
+        model.scale.set(4,4, 4);
+        model.rotateZ(-Math.PI/9)
+
+        let pos
+        for(var i = 0; i < amountreward; i++){
+          
+          coins.push(model.clone())
+          pos = getNewRewardPosition(0, 0)
+          coins[i].position.set(pos[0], 2, pos[1])
+          scene.add(coins[i])
+        }
+                      
       }, undefined, function(error) {
         console.error(error);
     });
+}
+
+
+function createTrees ( ){
+
+  let model, pos
+  const sizes = [ 4, 0.1]
+  const models = ['oak_trees', 'pine_tree']
+
+  for(let i = 0; i < models.length; i++){
     
-    isIdle = true
-    bicho.rotateY(-Math.PI/2)
-    scene.add(bicho)
+    const loader = new GLTFLoader()
+    loader.load( 'models/' + models[i] + '/scene.gltf', function ( gltf ) {
+
+        model = gltf.scene
+        model.scale.set(sizes[i], sizes[i], sizes[i]);
+                
+        for(var j = 0; j < amounttrees>>1; j++){
+
+          trees.push(model.clone())
+          pos = getNewRewardPosition(0, 0)
+          trees[trees.length - 1].position.set(pos[0], 0, pos[1])
+          scene.add(trees[trees.length - 1])
+        }
+                      
+      }, undefined, function(error) {
+        console.error(error);
+    });
+  }  
+}
+
+function createAgent( ){
+
+  bicho = new THREE.Object3D();
+
+    const loader = new GLTFLoader()
+    loader.load( 'models/hare_animated/scene.gltf', function ( gltf ) {
+      const model = SkeletonUtils.clone(gltf.scene) ;
+      const mixer = new THREE.AnimationMixer(model);
+      clips = gltf.animations;
+      
+      const clip = THREE.AnimationClip.findByName(clips, 'Armature|Idle  ');
+      const action = mixer.clipAction(clip);
+      bicho_actions['Armature|Idle  '] = action
+      action.play();
+      mixers.push(mixer);
+      bicho.add(model)
+
+    }, undefined, function(error) {
+      console.error(error);
+  });
+  
+  isIdle = true
+  bicho.rotateY(-Math.PI/2)
+  scene.add(bicho)
+}
+
+
+function loadScene()
+{
+    
+    createContinuousFloor()
+
+    var skyGeo = new THREE.BoxGeometry(800, 800, 800, 1, 1,1); 
+    sky = new THREE.Mesh(skyGeo);
+    const skyMaterial = createMaterialArray()
+    sky.material = skyMaterial
+    scene.add(sky);
+
+
+    createAgent( );
+    createTrees( );
+    console.log(trees)
+    
     scene.add( new THREE.AxesHelper(3) );
+
+    createRewards ( )
 }
  
+function checkCenter(){
+
+/// swap 9x9 matrix of continuous floe
+ 
+  // check movement towards upper row
+  if (bicho.position.x > continouosFloor[1][1].position.x + (lim>>1) ){
+    
+    //update position of lower row
+    for(var i = 0; i < 3; i++)
+      continouosFloor[2][i].position.x = continouosFloor[0][i].position.x + lim
+    //swap rows to mantain 9x9 matrix intuition
+
+    for(var i = 2; i > 0; i --)
+    [continouosFloor[i], continouosFloor[i-1]] = [continouosFloor[i-1], continouosFloor[i]]
+    console.log('ur')
+  }
+
+  // check movement towards lower row
+  if (bicho.position.x < continouosFloor[1][1].position.x - (lim>>1) ){
+    
+    //update position of lower row
+    for(var i = 0; i < 3; i++)
+      continouosFloor[0][i].position.x = continouosFloor[2][i].position.x - lim
+    //swap rows to mantain 9x9 matrix intuition
+
+    for(var i = 0; i < 2; i ++)
+    [continouosFloor[i], continouosFloor[i+1]] = [continouosFloor[i+1], continouosFloor[i]]
+    console.log('lr')
+  }
+
+  // check movement towards right column
+  if (bicho.position.z > continouosFloor[1][1].position.z + (lim>>1) ){
+    
+    //update position of lower row
+    for(var i = 0; i < 3; i++)
+      continouosFloor[i][0].position.z = continouosFloor[i][2].position.z + lim
+    
+      //swap rows to mantain 9x9 matrix intuition
+    for(var i = 0; i < continouosFloor.length; i++)
+      for(var j = 0; j < 2; j ++)
+        [continouosFloor[i][j], continouosFloor[i][j+1]] = [continouosFloor[i][j+1], continouosFloor[i][j]]
+    console.log('rc')
+  }
+
+  // check movement towards left column
+  if (bicho.position.z < continouosFloor[1][1].position.z - (lim>>1) ){
+
+    console.log(bicho.position.z, continouosFloor[1][1].position.z)
+    
+    //update position of lower row
+    for(var i = 0; i < 3; i++)
+      continouosFloor[i][2].position.z = continouosFloor[i][0].position.z - lim
+    
+      //swap rows to mantain 9x9 matrix intuition
+    for(var i = 0; i < continouosFloor.length; i++)
+      for(var j = 2; j > 0; j --)
+        [continouosFloor[i][j], continouosFloor[i][j-1]] = [continouosFloor[i][j-1], continouosFloor[i][j]]
+    console.log('lc')
+  }
+}
+
+function checkCarrotInteraction (){
+
+  const close_radius = 2
+  
+  for(var i = 0; i < coins.length; i++)
+    if(Math.hypot(bicho.position.x - coins[i].position.x, bicho.position.z - coins[i].position.z)  < close_radius){
+
+      const pos = getNewRewardPosition(bicho.position.x, bicho.position.z)
+      coins[i].position.set(pos[0], 2, pos[1])
+      record ++;
+      console.log(record)
+    }
+}
+
+function updateObjectsPosition (){
+
+  const far_radius = 400
+
+  for(var i = 0; i < coins.length; i++)
+    if(Math.hypot(bicho.position.x - coins[i].position.x, bicho.position.z - coins[i].position.z)  > far_radius){
+      const pos = getNewRewardPosition(bicho.position.x, bicho.position.z)
+      coins[i].position.set(pos[0], 2, pos[1])
+    }
+
+  for(var i = 0; i < trees.length; i++)
+    if(Math.hypot(bicho.position.x - trees[i].position.x, bicho.position.z - trees[i].position.z)  > far_radius){
+      const pos = getNewRewardPosition(bicho.position.x, bicho.position.z)
+      trees[i].position.set(pos[0], 2, pos[1])
+    }
+
+}
 
 function update(){ 
 
@@ -181,6 +385,7 @@ function update(){
     mixers[0].stopAllAction()
     const action = mixers[0].clipAction(clip);
     action.play();  
+    console.log(bicho.position)
     isIdle ^= 1
   }
   
@@ -188,9 +393,14 @@ function update(){
   bicho.translateZ( velocity );
   
   if(velocity > 1e-3){    
+
+    checkCarrotInteraction();
+    updateObjectsPosition();
     sky.position.setX(bicho.position.x)
     sky.position.setY(bicho.position.y)
     sky.position.setZ(bicho.position.z)
+
+    checkCenter();
   }
 
   if ( keys.a ){
@@ -208,13 +418,26 @@ function update(){
     
   dir.copy( a ).sub( b ).normalize();
   const dis = a.distanceTo( b ) - 0.3;
-  goal.position.addScaledVector( dir, dis );
+  goal.position.addScaledVector( dir, dis  );
   
   camera.lookAt( bicho.position );
 
 }
 
+function updateAspectRatio()
+{
+  renderer.setSize(window.innerWidth,window.innerHeight);
+
+  const ar = window.innerWidth/window.innerHeight;
+  camera.aspect = ar;
+  camera.updateProjectionMatrix();
+
+}
+
 function update_animation(time){
+
+  for(var i = 0; i < coins.length; i++)
+    coins[i].rotation.y += 0.01
 
   const delta = clock.getDelta();
   mixers.forEach(function(mixer) {

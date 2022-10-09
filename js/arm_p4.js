@@ -2,19 +2,23 @@ import * as THREE from "../lib/three.module.js";
 import {GLTFLoader} from "../lib/GLTFLoader.module.js";
 import {OrbitControls} from "../lib/OrbitControls.module.js"
 import {Tweezers} from "./tweezers.js"
+import {GUI} from "../lib/lil-gui.module.min.js";
+import {TWEEN} from "../lib/tween.module.min.js";
 
 // Variables estandara
-let renderer, scene, camera, controls, minicam;
+let renderer, scene, camera, controls, minicam, metal_material = [];
+let effectController, forearm, hand, tweezer0, tweezer1;
+let actualMaterial=0;
 
 // Otras globales
-let robot, arm, forearm, hand, tweezer0, tweezer1;
+let robot, arm;
 const L = 60;
-let angulo = 0;
-
+let angulo = 0, tween;
 
 // Acciones
 init();
 loadScene();
+setupGUI();
 render();
 
 export function addLighting(scene) {
@@ -39,6 +43,7 @@ function set_cameras(){
   camera= new THREE.PerspectiveCamera(100,window.innerWidth/window.innerHeight,1,600);
 
   camera.position.set(90, 300, 90);
+  // camera.position.set(20, 50, 10);
   camera.lookAt(0,1,0);
 
 }
@@ -68,7 +73,7 @@ function init()
     controls.enableDamping = true; 
     controls.dampingFactor = 0.05;
 
-    controls.minDistance = 300;
+    // controls.minDistance = 300;
     controls.maxDistance = 500;
     controls.maxPolarAngle = Math.PI / 2;
 
@@ -78,8 +83,9 @@ function init()
 
 function loadScene()
 {
-    const metal_material = new THREE.MeshPhongMaterial({color:'blue', shininess: 100, });
-    const material_actual = new THREE.MeshPhongMaterial({color:'red',wireframe:true});
+    metal_material.push(new THREE.MeshPhongMaterial({color:'blue', shininess: 100, }));
+    metal_material.push(new THREE.MeshPhongMaterial({color:'blue',wireframe:true}));
+    
     let floor_texture = new THREE.TextureLoader().load( 'images/suelo.jpg');
     floor_texture.wrapS = floor_texture.wrapT = THREE.RepeatWrapping;
     floor_texture.repeat.set(80, 80);
@@ -91,14 +97,14 @@ function loadScene()
     scene.add(suelo);
 
     // base
-    const base = new THREE.Mesh( new THREE.CylinderGeometry(50, 50, 15, 100), metal_material );
+    const base = new THREE.Mesh( new THREE.CylinderGeometry(50, 50, 15, 100), metal_material[0] );
 
     // arm
-    const arm_soulder = new THREE.Mesh( new THREE.CylinderGeometry(20, 20, 15, 100), metal_material );
+    const arm_soulder = new THREE.Mesh( new THREE.CylinderGeometry(20, 20, 15, 100), metal_material[0] );
     arm_soulder.rotation.set(0, Math.PI/2, Math.PI/2) 
 
-    const arm_humero = new THREE.Mesh( new THREE.BoxGeometry(18, 120, 12), metal_material );
-    const arm_elbow = new THREE.Mesh( new THREE.SphereGeometry(20, 20, 20), metal_material );
+    const arm_humero = new THREE.Mesh( new THREE.BoxGeometry(18, 120, 12), metal_material[0] );
+    const arm_elbow = new THREE.Mesh( new THREE.SphereGeometry(20, 20, 20), metal_material[0] );
 
     arm_humero.position.set(0, 60, 0)
     arm_elbow.position.set(0, 60*2, 0)
@@ -109,11 +115,11 @@ function loadScene()
     arm.add(arm_elbow);
 
     //forearm
-    const arm_elbow2 = new THREE.Mesh( new THREE.CylinderGeometry(22, 22, 6, 100), metal_material );
-    const nerve_0 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), metal_material );
-    const nerve_1 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), metal_material );
-    const nerve_2 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), metal_material );
-    const nerve_3 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), metal_material );
+    const arm_elbow2 = new THREE.Mesh( new THREE.CylinderGeometry(22, 22, 6, 100), metal_material[0] );
+    const nerve_0 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), metal_material[0] );
+    const nerve_1 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), metal_material[0] );
+    const nerve_2 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), metal_material[0] );
+    const nerve_3 = new THREE.Mesh( new THREE.BoxGeometry(4, 80, 4), metal_material[0] );
 
     nerve_0.position.set(22*0.5, 40+3, 22*0.5)
     nerve_1.position.set(-22*0.5, 40+3, 22*0.5)
@@ -129,11 +135,11 @@ function loadScene()
     forearm.add(nerve_3);
 
     //hand
-    const wrist = new THREE.Mesh( new THREE.CylinderGeometry(15, 15, 40, 100), metal_material );
+    const wrist = new THREE.Mesh( new THREE.CylinderGeometry(15, 15, 40, 100), metal_material[0] );
     wrist.rotation.x = Math.PI/2
 
     // tweezers   
-    tweezer0 = new Tweezers(metal_material)
+    tweezer0 = new Tweezers(metal_material[0])
     tweezer0.position.set(15, 0, 10)
 
     tweezer1 = tweezer0.clone()
@@ -155,6 +161,7 @@ function loadScene()
     robot.add(base);
     robot.add(arm);
     robot.position.y = 7.8;
+    // robot.scale.set(0.1,.1, .1)
 
     scene.add(robot);
 
@@ -172,20 +179,87 @@ function updateAspectRatio()
     // perspectiva
     camera.aspect = ar;
     camera.updateProjectionMatrix();
+}
 
+function updateMaterial(node){
+
+  if(!node.children.length){
+    node.material = metal_material[actualMaterial]
+    return;
+  }
+
+  for(var i = 0; i < node.children.length; i++)
+    updateMaterial(node.children[i])
+
+}
+
+function autoAnimate(){
+
+  tween.start()
+  console.log(tween, 'hoola')
+}
+
+
+function setupGUI()
+{
+	// Definicion de los controles
+	effectController = {
+		giroBase: 0.0,
+    giroBrazo: 0.0,
+    giroAntebrazoY: 0.0,
+    giroAntebrazoZ: 0.0,
+    giroPinzas: 0.0,
+    separacionPinza: 10.0,
+    alambre: false,
+    animate: autoAnimate
+    
+	};
+
+  //setupAnimation
+  tween = new TWEEN.Tween(effectController)
+	.to({giroBrazo:[-45, 0], separacionPinza:[15, 4, 4], giroAntebrazoZ: [-60, -30]}, 6000) 
+	.easing(TWEEN.Easing.Cubic.Out) 
+
+
+	// Creacion interfaz
+	const gui = new GUI();
+
+	// Construccion del menu
+	const h = gui.addFolder("Control esferaCubo");
+	// h.add(effectController, "mensaje").name("Aplicacion");
+	h.add(effectController, "giroBase", -180.0, 180.0, 0.025).name("Giro de la Base").listen();
+	h.add(effectController, "giroBrazo", -45.0, 45.0, 0.025).name("Giro del Brazo").listen();
+  h.add(effectController, "giroAntebrazoY", -180.0, 180.0, 0.025).name("Giro del Antebrazo (Y)").listen();
+  h.add(effectController, "giroAntebrazoZ", -90.0, 90.0, 0.025).name("Giro del Antebrazo (Z)").listen();
+  h.add(effectController, "giroPinzas", -40.0, 220.0, 0.025).name("Giro de Pinzas").listen();
+  h.add(effectController, "separacionPinza", 0.0, 15.0, 0.025).name("Separacion Pinza").listen();
+  h.add(effectController, 'alambre' ).name( 'Alambre' ).onChange( value => {
+		
+    actualMaterial ^= 1;
+    updateMaterial(robot)
+    
+	} );
+  h.add( effectController, 'animate' ).name( 'Animate' );
 }
 
 function update()
 {
-    angulo += 0.01;
-    robot.rotation.y = angulo;
+    robot.rotation.y = effectController.giroBase * Math.PI/180;
+    arm.rotation.z = effectController.giroBrazo * Math.PI/180;
+    forearm.rotation.y = effectController.giroAntebrazoY * Math.PI/180;
+    forearm.rotation.z = effectController.giroAntebrazoZ * Math.PI/180;
+    hand.rotation.z = effectController.giroPinzas * Math.PI/180;
+
+    tweezer0.position.z = effectController.separacionPinza;
+    tweezer1.position.z = -effectController.separacionPinza;
+    TWEEN.update()
 }
 
 function render()
 {
     requestAnimationFrame(render);
     controls.update();
-    // update()
+    update()
     renderer.clear();
 
     const min_dim = Math.min(window.innerHeight, window.innerWidth)
