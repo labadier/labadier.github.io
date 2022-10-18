@@ -30,10 +30,17 @@ function addLighting(scene) {
   let color = 0xFFFFFF;
   let intensity = 1;
   let light = new THREE.DirectionalLight(color, intensity);
-  light.position.set(110, 100, 110);
-  light.target.position.set(-5, -2, -5);
+  light.position.set(500, 500, 500);
+  // light.position.set(110, 100, 110);
+  light.target.position.set(0, 0, 0);
+  // light.target.position.set(-5, -2, -5);
+  
+  var ambiColor = "#0c0c0c";
+  var ambientLight = new THREE.AmbientLight(ambiColor);
+
   scene.add(light);
   scene.add(light.target);
+  scene.add(ambientLight)
 }
 
 function init()
@@ -51,11 +58,11 @@ function init()
     addLighting(scene)
 
     // Instanciar la camara
-    camera= new THREE.PerspectiveCamera(100,window.innerWidth/window.innerHeight,1,500);
-    // camera.position.set(0, 20, 0);
-    camera.position.set(5, 5, -1);
+    camera= new THREE.PerspectiveCamera(90 ,window.innerWidth/window.innerHeight,1,500);
+    camera.position.set(15, 15, 3);
+    // camera.position.set(10, 10, 5);
     
-    camera.lookAt(0,1,0);
+    camera.lookAt(0,20,0);
     
     backwalk = false
     goal = new THREE.Object3D;
@@ -183,8 +190,8 @@ function createRewards ( ){
 function createTrees ( ){
 
   let model, pos
-  const sizes = [ 4, 0.1]
-  const models = ['oak_trees', 'pine_tree']
+  const sizes = [ 0.1] //4
+  const models = ['pine_tree']
 
   for(let i = 0; i < models.length; i++){
     
@@ -194,7 +201,7 @@ function createTrees ( ){
         model = gltf.scene
         model.scale.set(sizes[i], sizes[i], sizes[i]);
                 
-        for(var j = 0; j < amounttrees>>1; j++){
+        for(var j = 0; j < amounttrees; j++){
 
           trees.push(model.clone())
           pos = getNewRewardPosition(0, 0)
@@ -338,13 +345,13 @@ function updateObjectsPosition (){
   for(var i = 0; i < coins.length; i++)
     if(Math.hypot(bicho.position.x - coins[i].position.x, bicho.position.z - coins[i].position.z)  > far_radius){
       const pos = getNewRewardPosition(bicho.position.x, bicho.position.z)
-      coins[i].position.set(pos[0], 2, pos[1])
+      coins[i].position.set(pos[0], 0, pos[1])
     }
 
   for(var i = 0; i < trees.length; i++)
     if(Math.hypot(bicho.position.x - trees[i].position.x, bicho.position.z - trees[i].position.z)  > far_radius){
       const pos = getNewRewardPosition(bicho.position.x, bicho.position.z)
-      trees[i].position.set(pos[0], 2, pos[1])
+      trees[i].position.set(pos[0], 0, pos[1])
     }
 
 }
