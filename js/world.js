@@ -207,8 +207,8 @@ function getNewAsteroidPosition ( x, z){
   let nx, nz  
   [nx, nz] = [x, z]
 
-  nx = x + generationrange/5 - Math.floor(Math.random() * generationrange*2/5);
-  nz = z + generationrange/5 - Math.floor(Math.random() * generationrange*2/5);
+  nx = x + generationrange/3 - Math.floor(Math.random() * generationrange*2/3);
+  nz = z + generationrange/3 - Math.floor(Math.random() * generationrange*2/3);
   
   
   return [nx, nz]
@@ -270,17 +270,18 @@ function createAsteroids ( ){
           asteroids_anchor.push(new CANNON.Body({ 
                             shape: new CANNON.Box(new CANNON.Vec3(5,5,5)),
                             mass: 1e-4, 
-                            material: asteroidsMaterial,
+                            // material: asteroidsMaterial,
                           }))
 
 
-          asteroids_anchor[i].angularVelocity.set(0.2, 0, 0)
+          // asteroids_anchor[i].angularVelocity.set(0.2, 0, 0)
           asteroids_anchor[i].angularDamping = 0.9
+          // asteroids_anchor[i].lienarDamping = 0.9
 
-          asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0, - Math.random()*100, 0))
+          asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0,  Math.random()*300, 0))
           
-          pos = getNewAsteroidPosition(0, 0)//[0, 0]
-          asteroids_anchor[i].position.set(pos[0], 300, pos[1])
+          pos = relocateTreePosition(0, 0)//[0, 0]
+          asteroids_anchor[i].position.set(pos[0], 500, pos[1])
 
           scene.add(asteroids[i])
           world.addBody(asteroids_anchor[i])
@@ -386,7 +387,8 @@ function loadPhysicalWorld()
     const ground = new CANNON.Body({ 
               shape: new CANNON.Plane(),
               mass: 0, 
-              material: groundMaterial
+              material: groundMaterial,
+              restitution:0,
               });
     ground.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0),-Math.PI/2);
     // ground.position.set(0,-4.8,0)
@@ -617,7 +619,7 @@ function update_animation(time){
     if(timeGround[i] > resetime){
       timeGround[i] = -1
       let pos = getNewAsteroidPosition(bicho.position.x, bicho.position.z)
-      asteroids_anchor[i].position.set(pos[0], 300, pos[1])
+      asteroids_anchor[i].position.set(pos[0], 150, pos[1])
       asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0, - Math.random()*100, 0))
       asteroids_anchor[i].angularVelocity.set(0.2, 0, 0)  
     }
