@@ -9,12 +9,14 @@ import { OrbitControls } from '../node_modules/three/examples/jsm/controls/Orbit
 let renderer, scene, camera, bicho, goal, keys, sky, coins = [], asteroids = [];
 let mixers = [], clock, clips, isIdle, bicho_actions = {}, trees = []
 const amountreward = 150
-const amounttrees = 20
+const amounttrees = 60
 const lim = 600, continouosFloor = new Array(3)
 
 // Otras globales
 let velocity = 0.0;
 let speed = 0.0;
+const visionrange = 500;
+const generationrange = 800
 
 let dir = new THREE.Vector3;
 let a = new THREE.Vector3;
@@ -30,12 +32,10 @@ function addLighting(scene) {
   let color = 0xFFFFFF;
   let intensity = 1;
   let light = new THREE.DirectionalLight(color, intensity);
-  light.position.set(500, 500, 500);
-  // light.position.set(110, 100, 110);
+  light.position.set(0, 400, 0);
   light.target.position.set(0, 0, 0);
-  // light.target.position.set(-5, -2, -5);
   
-  var ambiColor = "#0c0c0c";
+  var ambiColor = "rgb(100, 100, 100 )";
   var ambientLight = new THREE.AmbientLight(ambiColor);
 
   scene.add(light);
@@ -58,11 +58,12 @@ function init()
     addLighting(scene)
 
     // Instanciar la camara
-    camera= new THREE.PerspectiveCamera(90 ,window.innerWidth/window.innerHeight,1,500);
+    camera= new THREE.PerspectiveCamera(90 ,window.innerWidth/window.innerHeight,1,visionrange);
     camera.position.set(15, 15, 3);
-    // camera.position.set(10, 10, 5);
+    // camera.position.set(0, 60, 0);
     
-    camera.lookAt(0,20,0);
+    camera.lookAt(0,0,0);
+    // camera.lookAt(0,20,0);
     
     backwalk = false
     goal = new THREE.Object3D;
@@ -154,11 +155,26 @@ function getNewRewardPosition ( x, z){
 
   const radius = 3
   while (nx < x + radius && nx > x - radius && nz < z + radius && nz > z - radius){
-    nx = 500 - Math.floor(Math.random() * 1000);
-    nz = 500 - Math.floor(Math.random() * 1000);
+    nx = x + generationrange - Math.floor(Math.random() * generationrange * 2);
+    nz = z + generationrange - Math.floor(Math.random() * generationrange * 2);
   }
   
   return [nx, nz]
+}
+
+function relocateTreePosition ( x, z ){
+
+  let nx, nz  
+
+  
+  let angle = Math.PI*2*Math.random()
+  let distance = visionrange + Math.random()*(generationrange - visionrange )
+
+  nx = distance*Math.sin(angle)
+  nz = distance*Math.cos(angle)
+
+  console.log(distance)
+  return [x + nx, z + nz]
 }
 
 function createRewards ( ){
@@ -222,6 +238,7 @@ function createAgent( ){
     const loader = new GLTFLoader()
     loader.load( 'models/hare_animated/scene.gltf', function ( gltf ) {
       const model = SkeletonUtils.clone(gltf.scene) ;
+
       const mixer = new THREE.AnimationMixer(model);
       clips = gltf.animations;
       
@@ -340,17 +357,15 @@ function checkCarrotInteraction (){
 
 function updateObjectsPosition (){
 
-  const far_radius = 400
-
   for(var i = 0; i < coins.length; i++)
-    if(Math.hypot(bicho.position.x - coins[i].position.x, bicho.position.z - coins[i].position.z)  > far_radius){
+    if(Math.hypot(bicho.position.x - coins[i].position.x, bicho.position.z - coins[i].position.z)  > visionrange){
       const pos = getNewRewardPosition(bicho.position.x, bicho.position.z)
       coins[i].position.set(pos[0], 0, pos[1])
     }
 
   for(var i = 0; i < trees.length; i++)
-    if(Math.hypot(bicho.position.x - trees[i].position.x, bicho.position.z - trees[i].position.z)  > far_radius){
-      const pos = getNewRewardPosition(bicho.position.x, bicho.position.z)
+    if(Math.hypot(bicho.position.x - trees[i].position.x, bicho.position.z - trees[i].position.z)  > generationrange){
+      const pos = relocateTreePosition(bicho.position.x, bicho.position.z)
       trees[i].position.set(pos[0], 0, pos[1])
     }
 

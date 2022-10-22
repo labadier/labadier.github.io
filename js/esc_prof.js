@@ -1,218 +1,285 @@
 /**
- * Esferas.js
- * Seminario GPC #4  Animación por simulación física.
- * Esferas en habitación cerrada con molinete central
+ * EscenaIluminada.js
  * 
- * @author <rvivo@upv.es>, 2022
+ * Seminario GPC#5. Construir una escena básica animada, con gui e iluminacion.
+ * 
+ * @author R.Vivo' <rvivo@upv.es>
+ * @date   Oct,2022
+ * 
  */
 
- import * as THREE from "../lib/three.module.js";
- import {OrbitControls} from "../lib/OrbitControls.module.js";
- import Stats from "../lib/stats.module.js";
- import {TWEEN} from "../lib/tween.module.min.js";
- import * as CANNON from '../lib/cannon-es.js'; 
- //import * as CANNON from 'https://unpkg.com/cannon-es@0.19.0/dist/cannon-es.js'; 
- 
- // Globales convenidas por threejs
- const renderer = new THREE.WebGLRenderer();
- let camera;
- const scene = new THREE.Scene();
- // Control de camara
- let cameraControls;
- // Monitor de recursos
- const reloj = new THREE.Clock();
- const stats = new Stats();
- // Mundo fisico
- let world;
- let disk;
- const nesferas = 20;
- const esferas = [];
- const groundMaterial = new CANNON.Material("groundMaterial");
- const materialEsfera = new CANNON.Material("sphereMaterial");
- 
- // Acciones
- loadPhysicalWorld();
- loadVisualWorld();
- render();
- 
- /**
-  * Construye una bola con cuerpo y vista
-  */
- function esfera( radio, posicion, material ){
-   var masa = 1;
-   this.body = new CANNON.Body( {mass: masa, material: material} );
-   this.body.addShape( new CANNON.Sphere( radio ) );
-   this.body.position.copy( posicion );
-   this.visual = new THREE.Mesh( new THREE.SphereGeometry( radio ), 
-               new THREE.MeshBasicMaterial( {wireframe: true } ) );
-   this.visual.position.copy( this.body.position );
- }
- 
- /**
-  * Carga el mundo fisico con un
-  * suelo, cuatro paredes de altura infinita, un
-  * disco que gira y el collar de esferas
-  */
- function loadPhysicalWorld()
- {
-   // Mundo 
-     world = new CANNON.World(); 
-      world.gravity.set(0,-9.8,0); 
- 
-   // Comprtamiento de materiales en contacto
- 
-     const sphereGroundContactMaterial = new CANNON.ContactMaterial(groundMaterial,materialEsfera,
-                                     { friction: 0.7, 
-                                         restitution: 0.7 });
-     world.addContactMaterial(sphereGroundContactMaterial);
- 
-     // Suelo
-     const groundShape = new CANNON.Plane();
-     const ground = new CANNON.Body({ mass: 0, material: groundMaterial });
-     ground.addShape(groundShape);
-   ground.position.y = -0.25;
-     ground.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0),-Math.PI/2);
-     world.addBody(ground);
- 
-     // Paredes
-     const backWall = new CANNON.Body( {mass:0, material:groundMaterial} );
-     backWall.addShape( new CANNON.Plane() );
-     backWall.position.z = -5;
-     world.addBody( backWall );
- 
-     const frontWall = new CANNON.Body( {mass:0, material:groundMaterial} );
-     frontWall.addShape( new CANNON.Plane() );
-     frontWall.quaternion.setFromEuler(0,Math.PI,0,'XYZ');
-     frontWall.position.z = 5;
-     world.addBody( frontWall );
- 
-     const leftWall = new CANNON.Body( {mass:0, material:groundMaterial} );
-     leftWall.addShape( new CANNON.Plane() );
-     leftWall.position.x = -5;
-     leftWall.quaternion.setFromEuler(0,Math.PI/2,0,'XYZ');
-     world.addBody( leftWall );
- 
-     const rightWall = new CANNON.Body( {mass:0, material:groundMaterial} );
-     rightWall.addShape( new CANNON.Plane() );
-     rightWall.position.x = 5;
-     rightWall.quaternion.setFromEuler(0,-Math.PI/2,0,'XYZ');
-     world.addBody( rightWall );
- 
-   // Collar de esferas
-   for (var i = 0; i < nesferas; i++) {
-     const e = new esfera( 1/2, new CANNON.Vec3( -1, i+1, 0 ), materialEsfera );
-     world.addBody( e.body );
-     scene.add( e.visual );
-     esferas.push( e );
-   };
- 
-     // Restricciones
-    for (var i = 0; i < esferas.length-1; i++) {
-       const restriccion = new CANNON.PointToPointConstraint(esferas[i].body,
-                                 new CANNON.Vec3( 0, 1/2, 0),
-                                 esferas[i+1].body,
-                             new CANNON.Vec3( 0, -1/2, 0) ); 
-        world.addConstraint( restriccion );
-    };   
- 
-   // Molinete
-   // Es un disco fijo (masa=0) con velocidad angular que se representa como
-   // un disco girando con tween
-     const discShape = new CANNON.Cylinder(4,4,0.5,10); // ojo: eje en y
-     disk = new CANNON.Body({ mass: 0, material: groundMaterial });
-     disk.addShape(discShape);
-     disk.angularVelocity.set(0,3,0); 
-     world.addBody(disk);
- }
- 
- /**
-  * Carga la escena visual
-  */
- function loadVisualWorld()
- {
-   // Inicializar el motor de render
-   
-   renderer.setSize( window.innerWidth, window.innerHeight );
-   renderer.setClearColor( new THREE.Color(0x000000) );
-   document.getElementById( 'container' ).appendChild( renderer.domElement );
- 
-   // Reloj
-   reloj.start();
- 
-   // Crear y situar la camara
-   const aspectRatio = window.innerWidth / window.innerHeight;
-   camera = new THREE.PerspectiveCamera( 75, aspectRatio , 0.1, 100 );
-   camera.position.set( 2,5,10 );
-   camera.lookAt( new THREE.Vector3( 0,0,0 ) );
-   // Control de camara
-   cameraControls = new OrbitControls( camera, renderer.domElement );
-   cameraControls.target.set(0,0,0);
- 
-   // STATS --> stats.update() en update()
-   
-   stats.showPanel(0);	// FPS inicialmente. Picar para cambiar panel.
-   document.getElementById( 'container' ).appendChild( stats.domElement );
- 
-   // Callbacks
-   window.addEventListener('resize', updateAspectRatio );
- 
-   // Objetos
-   const molinete = new THREE.Mesh( new THREE.CylinderGeometry(4,4,0.5,40), 				
-                    new THREE.MeshBasicMaterial({color: 'black', wireframe: true}) ); 
-   scene.add( molinete );
-   molinete.add( new THREE.AxesHelper(1) );
-   molinete.position.copy( disk.position );
- 
-   const giro = new TWEEN.Tween( molinete.rotation ).to( {x:0, y:2*Math.PI, z:0}, 3000 );
-   giro.repeat(Infinity);
-   giro.start();
- 
-   // Suelo
-   const suelo = new THREE.Mesh( new THREE.PlaneGeometry(10,10,1,1), new THREE.MeshNormalMaterial());
-   suelo.rotation.x = -Math.PI/2;
-   suelo.position.y = -0.25;
-   scene.add( suelo);
- 
-   scene.add( new THREE.AxesHelper(5 ) );
- 
- }
- 
- /**
-  * Isotropía frente a redimension del canvas
-  */
- function updateAspectRatio()
- {
-   renderer.setSize(window.innerWidth, window.innerHeight);
-   camera.aspect = window.innerWidth/window.innerHeight;
-   camera.updateProjectionMatrix();
- }
- 
- /**
-  * Actualizacion segun pasa el tiempo
-  */
- function update()
- {
-   const segundos = reloj.getDelta();	// tiempo en segundos que ha pasado por si hace falte
-   world.fixedStep()					// recalcula el mundo a periodo fijo (60Hz)
- 
-   for (var i = 0; i < esferas.length; i++) {
-     esferas[i].visual.position.copy( esferas[i].body.position );
-     esferas[i].visual.quaternion.copy( esferas[i].body.quaternion );
-   };
- 
-   // Actualiza el monitor 
-   stats.update();
- 
-   // Actualiza el movimeinto del molinete
-   TWEEN.update();
- }
- 
- /**
-  * Update & render
-  */
- function render()
- {
-   requestAnimationFrame( render );
-   update();
-   renderer.render( scene, camera );
- }
+// Modulos necesarios
+import * as THREE from "../lib/three.module.js";
+import {GLTFLoader} from "../lib/GLTFLoader.module.js";
+import {OrbitControls} from "../lib/OrbitControls.module.js";
+import {TWEEN} from "../lib/tween.module.min.js";
+import {GUI} from "../lib/lil-gui.module.min.js";
+
+// Variables estandar
+let renderer, scene, camera;
+
+// Otras globales
+let cameraControls, effectController;
+let esferaCubo,cubo,esfera,suelo;
+let video;
+
+// Acciones
+init();
+loadScene();
+setupGUI();
+render();
+
+function init()
+{
+    // Instanciar el motor de render
+    renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth,window.innerHeight);
+    document.getElementById('container').appendChild( renderer.domElement );
+    renderer.antialias = true;
+    renderer.shadowMap.enabled = true;
+
+    // Instanciar el nodo raiz de la escena
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0.5,0.5,0.5);
+
+    // Instanciar la camara
+    camera= new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,1,100);
+    camera.position.set(0.5,2,7);
+    cameraControls = new OrbitControls( camera, renderer.domElement );
+    cameraControls.target.set(0,1,0);
+    camera.lookAt(0,1,0);
+
+    // Luces
+    const ambiental = new THREE.AmbientLight(0x222222);
+    scene.add(ambiental);
+    const direccional = new THREE.DirectionalLight(0xFFFFFF,0.3);
+    direccional.position.set(-1,1,-1);
+    direccional.castShadow = true;
+    scene.add(direccional);
+    const puntual = new THREE.PointLight(0xFFFFFF,0.5);
+    puntual.position.set(2,7,-4);
+    scene.add(puntual);
+    const focal = new THREE.SpotLight(0xFFFFFF,0.3);
+    focal.position.set(-2,7,4);
+    focal.target.position.set(0,0,0);
+    focal.angle= Math.PI/7;
+    focal.penumbra = 0.3;
+    focal.castShadow= true;
+    focal.shadow.camera.far = 20;
+    focal.shadow.camera.fov = 80;
+    scene.add(focal);
+    scene.add(new THREE.CameraHelper(focal.shadow.camera));
+
+    // Eventos
+    window.addEventListener('resize', updateAspectRatio );
+    renderer.domElement.addEventListener('dblclick', animate );
+}
+
+
+function loadScene()
+{
+    // Materiales 
+    const path ="./images/";
+    const texcubo = new THREE.TextureLoader().load(path+"wood512.jpg");
+    const texsuelo = new THREE.TextureLoader().load(path+"r_256.jpg");
+    texsuelo.repeat.set(4,3);
+    texsuelo.wrapS= texsuelo.wrapT = THREE.RepeatWrapping;
+    const entorno = [ path+"posx.jpg", path+"negx.jpg",
+                      path+"posy.jpg", path+"negy.jpg",
+                      path+"posz.jpg", path+"negz.jpg"];
+    const texesfera = new THREE.CubeTextureLoader().load(entorno);
+
+    const matcubo = new THREE.MeshLambertMaterial({color:'yellow',map:texcubo});
+    const matesfera = new THREE.MeshPhongMaterial({color:'white',
+                                                   specular:'gray',
+                                                   shininess: 30,
+                                                   envMap: texesfera });
+    const matsuelo = new THREE.MeshStandardMaterial({color:"rgb(150,150,150)",map:texsuelo});
+
+    // Suelo
+    suelo = new THREE.Mesh( new THREE.PlaneGeometry(10,10, 100,100), matsuelo );
+    suelo.rotation.x = -Math.PI/2;
+    suelo.position.y = -0.2;
+    suelo.receiveShadow = true;
+    scene.add(suelo);
+
+    // Esfera y cubo
+    esfera = new THREE.Mesh( new THREE.SphereGeometry(1,20,20), matesfera );
+    cubo = new THREE.Mesh( new THREE.BoxGeometry(2,2,2), matcubo );
+    esfera.position.x = 1;
+    cubo.position.x = -1;
+    esfera.castShadow = true;
+    esfera.receiveShadow = true;
+    cubo.castShadow = cubo.receiveShadow = true;
+
+    esferaCubo = new THREE.Object3D();
+    esferaCubo.add(esfera);
+    esferaCubo.add(cubo);
+    esferaCubo.position.y = 1.5;
+
+    scene.add(esferaCubo);
+
+    scene.add( new THREE.AxesHelper(3) );
+    cubo.add( new THREE.AxesHelper(1) );
+
+    // Modelos importados
+    const loader = new THREE.ObjectLoader();
+    loader.load('models/soldado/soldado.json', 
+    function (objeto)
+    {
+        const soldado = new THREE.Object3D();
+        soldado.add(objeto);
+        cubo.add(soldado);
+        soldado.position.y = 1;
+        soldado.name = 'soldado';
+        soldado.traverse(ob=>{
+            if(ob.isObject3D) ob.castShadow = true;
+        });
+        objeto.material.setValues( {map:
+         new THREE.TextureLoader().load("models/soldado/soldado.png")} );
+    });
+
+    const glloader = new GLTFLoader();
+    glloader.load('models/RobotExpressive.glb',
+    function(objeto)
+    {
+        esfera.add(objeto.scene);
+        objeto.scene.scale.set(0.5,0.5,0.5);
+        objeto.scene.position.y = 1;
+        objeto.scene.rotation.y = -Math.PI/2;
+        objeto.scene.name = 'robot';
+        console.log("ROBOT");
+        console.log(objeto);
+        objeto.scene.traverse(ob=>{
+            if(ob.isObject3D) ob.castShadow = true;
+        })
+    });
+
+    // Habitacion
+    const paredes = [];
+    paredes.push( new THREE.MeshBasicMaterial({side:THREE.BackSide,
+                  map: new THREE.TextureLoader().load(path+"posx.jpg")}) );
+    paredes.push( new THREE.MeshBasicMaterial({side:THREE.BackSide,
+                  map: new THREE.TextureLoader().load(path+"negx.jpg")}) );
+    paredes.push( new THREE.MeshBasicMaterial({side:THREE.BackSide,
+                  map: new THREE.TextureLoader().load(path+"posy.jpg")}) );
+    paredes.push( new THREE.MeshBasicMaterial({side:THREE.BackSide,
+                  map: new THREE.TextureLoader().load(path+"negy.jpg")}) );
+    paredes.push( new THREE.MeshBasicMaterial({side:THREE.BackSide,
+                  map: new THREE.TextureLoader().load(path+"posz.jpg")}) );
+    paredes.push( new THREE.MeshBasicMaterial({side:THREE.BackSide,
+                  map: new THREE.TextureLoader().load(path+"negz.jpg")}) );
+    const habitacion = new THREE.Mesh( new THREE.BoxGeometry(40,40,40),paredes);
+    scene.add(habitacion);
+
+    // Cine
+    video = document.createElement('video');
+    video.src = "./videos/Pixar.mp4";
+    video.load();
+    video.muted = true;
+    video.play();
+    const texvideo = new THREE.VideoTexture(video);
+    const pantalla = new THREE.Mesh(new THREE.PlaneGeometry(20,6, 4,4), 
+                                    new THREE.MeshBasicMaterial({map:texvideo}));
+    pantalla.position.set(0,4.5,-5);
+    scene.add(pantalla);
+}
+
+function setupGUI()
+{
+	// Definicion de los controles
+	effectController = {
+		mensaje: 'My cinema',
+		giroY: 0.0,
+		separacion: 0,
+		sombras: true,
+		play: function(){video.play();},
+		pause: function(){video.pause();},
+        mute: true,
+		colorsuelo: "rgb(150,150,150)"
+	};
+
+	// Creacion interfaz
+	const gui = new GUI();
+
+	// Construccion del menu
+	const h = gui.addFolder("Control esferaCubo");
+	h.add(effectController, "mensaje").name("Aplicacion");
+	h.add(effectController, "giroY", -180.0, 180.0, 0.025).name("Giro en Y");
+	h.add(effectController, "separacion", { 'Ninguna': 0, 'Media': 2, 'Total': 5 })
+     .name("Separacion")
+     .onChange(s=>{
+        cubo.position.set( -1-s/2, 0, 0 );
+        esfera.position.set( 1+s/2, 0, 0 );
+     });
+	h.add(effectController, "sombras")
+      .onChange(v=>{
+        cubo.castShadow = v;
+        esfera.castShadow = v;
+      });
+    h.addColor(effectController, "colorsuelo")
+     .name("Color moqueta")
+     .onChange(c=>{suelo.material.setValues({color:c})});
+    const videofolder = gui.addFolder("Control video");
+    videofolder.add(effectController,"mute").onChange(v=>{video.muted = v});
+	videofolder.add(effectController,"play");
+	videofolder.add(effectController,"pause");
+
+}
+
+function updateAspectRatio()
+{
+    const ar = window.innerWidth/window.innerHeight;
+    renderer.setSize(window.innerWidth,window.innerHeight);
+    camera.aspect = ar;
+    camera.updateProjectionMatrix();
+}
+
+function animate(event)
+{
+    // Capturar y normalizar
+    let x= event.clientX;
+    let y = event.clientY;
+    x = ( x / window.innerWidth ) * 2 - 1;
+    y = -( y / window.innerHeight ) * 2 + 1;
+
+    // Construir el rayo y detectar la interseccion
+    const rayo = new THREE.Raycaster();
+    rayo.setFromCamera(new THREE.Vector2(x,y), camera);
+    const soldado = scene.getObjectByName('soldado');
+    const robot = scene.getObjectByName('robot');
+    let intersecciones = rayo.intersectObjects(soldado.children,true);
+
+    if( intersecciones.length > 0 ){
+        new TWEEN.Tween( soldado.position ).
+        to( {x:[0,0],y:[3,1],z:[0,0]}, 2000 ).
+        interpolation( TWEEN.Interpolation.Bezier ).
+        easing( TWEEN.Easing.Bounce.Out ).
+        start();
+    }
+
+    intersecciones = rayo.intersectObjects(robot.children,true);
+
+    if( intersecciones.length > 0 ){
+        new TWEEN.Tween( robot.rotation ).
+        to( {x:[0,0],y:[Math.PI,-Math.PI/2],z:[0,0]}, 5000 ).
+        interpolation( TWEEN.Interpolation.Linear ).
+        easing( TWEEN.Easing.Exponential.InOut ).
+        start();
+    }
+}
+
+function update()
+{
+	// Lectura de controles en GUI (mejor hacerlo como callback)
+	esferaCubo.rotation.y = effectController.giroY * Math.PI/180;
+
+    TWEEN.update();
+}
+
+function render()
+{
+    requestAnimationFrame(render);
+    update();
+    renderer.render(scene,camera);
+}
