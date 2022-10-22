@@ -1,46 +1,72 @@
-import * as THREE from '../node_modules/three/build/three.module.js';
-// import {GLTFLoader} from "./lib/GLTFLoader.module.js";
-import {OBJLoader} from '../node_modules/three/examples/jsm/loaders/OBJLoader.js';
-import {GLTFLoader} from '../node_modules/three/examples/jsm/loaders/GLTFLoader.js';
-import * as SkeletonUtils from '../node_modules/three/examples/jsm/utils/SkeletonUtils.js';
-import { OrbitControls } from '../node_modules/three/examples/jsm/controls/OrbitControls.js'; 
+import * as THREE from '../lib/three.module.js';
+import {GLTFLoader} from '../lib/GLTFLoader.module.js';
+import * as SkeletonUtils from '../lib/SkeletonUtils.js';
+import * as CANNON from '../lib/cannon-es.js'; 
+import Stats from "../lib/stats.module.js";
 
+let light;
+let avelrange = 100, resetime = 4
+let groundMaterial, asteroidsMaterial;
+let asteroidGroundContact;
 
-let renderer, scene, camera, bicho, goal, keys, sky, coins = [], asteroids = [];
+let stats;
+
+let renderer, scene, camera, bicho, goal, keys, sky, coins = []
+let asteroids = [], asteroids_anchor = [];
 let mixers = [], clock, clips, isIdle, bicho_actions = {}, trees = []
 const amountreward = 150
 const amounttrees = 60
+const amountasteroids = 20
 const lim = 600, continouosFloor = new Array(3)
+
+let centerChanged = true
+let lightPosition = new THREE.Vector3;
+
+let timeGround = []
 
 // Otras globales
 let velocity = 0.0;
 let speed = 0.0;
 const visionrange = 500;
-const generationrange = 800
+const generationrange = 550
 
 let dir = new THREE.Vector3;
 let a = new THREE.Vector3;
 let b = new THREE.Vector3;
 let backwalk, record = 0
 
+let world
+
 // Acciones
 init();
 loadScene();
+loadPhysicalWorld();
 render();
 
 function addLighting(scene) {
-  let color = 0xFFFFFF;
-  let intensity = 1;
-  let light = new THREE.DirectionalLight(color, intensity);
-  light.position.set(0, 400, 0);
+  
+  light = new THREE.DirectionalLight(0xFFFFFF, 0.8);
+  light.position.set(300, 800, 300);
+  lightPosition.set(300, 800, 300);
+  // light.position.set(300, 400, 300);
+
+  light.shadow.camera.top = 2*visionrange;
+  light.shadow.camera.left = -2*visionrange;
+  light.shadow.camera.far = 1800;
+  light.shadow.camera.right = 2*visionrange;
+  light.shadow.camera.bottom = -2*visionrange;
+  light.shadow.penumbra = 0.5
+  light.castShadow = true;
+
   light.target.position.set(0, 0, 0);
   
-  var ambiColor = "rgb(100, 100, 100 )";
+  var ambiColor = "rgb(200, 200, 200 )";
   var ambientLight = new THREE.AmbientLight(ambiColor);
 
   scene.add(light);
-  scene.add(light.target);
-  scene.add(ambientLight)
+  scene.add( light.target )
+  scene.add(ambientLight);
+  // scene.add(new THREE.CameraHelper(light.shadow.camera))
 }
 
 function init()
@@ -49,18 +75,36 @@ function init()
     renderer = new THREE.WebGLRenderer();
     renderer.setSize(window.innerWidth,window.innerHeight);  
     clock = new THREE.Clock();
+    renderer.shadowMap.enabled = true;
+    renderer.antialias = true;
+
+    groundMaterial = new CANNON.Material()
+    asteroidsMaterial = new CANNON.Material()
+    asteroidGroundContact = new CANNON.ContactMaterial(
+      groundMaterial,
+      asteroidsMaterial,
+      {
+      restitution:0,
+      friction:12}
+    )
+    
+
+    stats = Stats()
+    document.body.appendChild(stats.dom)
+
+    renderer.setClearColor(new THREE.Color(0.7,0.7,0.7));
 
     document.getElementById('container').appendChild( renderer.domElement );
 
     // Instanciar el nodo raiz de la escena
     scene = new THREE.Scene();
-    // scene.background = new THREE.Color(0.5,0.5,0.5);
     addLighting(scene)
 
     // Instanciar la camara
-    camera= new THREE.PerspectiveCamera(90 ,window.innerWidth/window.innerHeight,1,visionrange);
+    camera= new THREE.PerspectiveCamera(90 ,window.innerWidth/window.innerHeight,1,visionrange*5);
     camera.position.set(15, 15, 3);
-    // camera.position.set(0, 60, 0);
+    // camera.position.set(30, 2, 3);
+    // camera.position.set(300, 450, 500);
     
     camera.lookAt(0,0,0);
     // camera.lookAt(0,20,0);
@@ -116,15 +160,15 @@ function createContinuousFloor(){
   let floor_texture = new THREE.TextureLoader().load( 'images/suelo.jpg');
   floor_texture.wrapS = floor_texture.wrapT = THREE.RepeatWrapping;
   floor_texture.repeat.set(8*lim/100, 8*lim/100);
-  floor_texture = new THREE.MeshBasicMaterial({map: floor_texture});
-  
-  console.log(lim)
+  floor_texture = new THREE.MeshStandardMaterial({map: floor_texture});
 
   for(var i = 0; i < 3; i ++)
     continouosFloor[i] = new Array(3)
 
   continouosFloor[1][1] = new THREE.Mesh( new THREE.PlaneGeometry(lim,lim), floor_texture );
   continouosFloor[1][1].rotation.x = -Math.PI/2;
+  continouosFloor[1][1].receiveShadow = true;
+
   scene.add(continouosFloor[1][1]);
   
   const mf = [-1, -1, -1, 0, 0, 1, 1, 1]
@@ -136,16 +180,12 @@ function createContinuousFloor(){
 
     const nf = 1 + mf[i];
     const nc = 1 + mc[i];
-    // const material = new THREE.MeshBasicMaterial({color:clsr[i],wireframe:true});
     continouosFloor[nf][nc] = continouosFloor[1][1].clone()
     continouosFloor[nf][nc].position.x = -lim*mf[i]
     continouosFloor[nf][nc].position.z = lim*mc[i]
-    // if(nf != nc)
-    //   continouosFloor[nf][nc].material = material
-    
+        
     scene.add(continouosFloor[nf][nc])
   } 
-  console.log(continouosFloor)
 }
 
 function getNewRewardPosition ( x, z){
@@ -162,6 +202,18 @@ function getNewRewardPosition ( x, z){
   return [nx, nz]
 }
 
+function getNewAsteroidPosition ( x, z){
+
+  let nx, nz  
+  [nx, nz] = [x, z]
+
+  nx = x + generationrange/5 - Math.floor(Math.random() * generationrange*2/5);
+  nz = z + generationrange/5 - Math.floor(Math.random() * generationrange*2/5);
+  
+  
+  return [nx, nz]
+}
+
 function relocateTreePosition ( x, z ){
 
   let nx, nz  
@@ -173,7 +225,6 @@ function relocateTreePosition ( x, z ){
   nx = distance*Math.sin(angle)
   nz = distance*Math.cos(angle)
 
-  console.log(distance)
   return [x + nx, z + nz]
 }
 
@@ -202,6 +253,44 @@ function createRewards ( ){
     });
 }
 
+function createAsteroids ( ){
+
+  let model;
+  const loader = new GLTFLoader()
+    loader.load( 'models/meteorite/scene.gltf', function ( gltf ) {
+
+        model = gltf.scene
+        let pos
+        for(var i = 0; i < amountasteroids; i++){
+          
+          // asteroids.push(new THREE.Mesh( new THREE.BoxGeometry(10,10, 10)))
+          // asteroids[i].add(model.clone())
+          asteroids.push(model.clone())
+          timeGround.push(-1)
+          asteroids_anchor.push(new CANNON.Body({ 
+                            shape: new CANNON.Box(new CANNON.Vec3(5,5,5)),
+                            mass: 1e-4, 
+                            material: asteroidsMaterial,
+                          }))
+
+
+          asteroids_anchor[i].angularVelocity.set(0.2, 0, 0)
+          asteroids_anchor[i].angularDamping = 0.9
+
+          asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0, - Math.random()*100, 0))
+          
+          pos = getNewAsteroidPosition(0, 0)//[0, 0]
+          asteroids_anchor[i].position.set(pos[0], 300, pos[1])
+
+          scene.add(asteroids[i])
+          world.addBody(asteroids_anchor[i])
+        }
+                      
+      }, undefined, function(error) {
+        console.error(error);
+    });
+  
+}
 
 function createTrees ( ){
 
@@ -216,6 +305,11 @@ function createTrees ( ){
 
         model = gltf.scene
         model.scale.set(sizes[i], sizes[i], sizes[i]);
+        
+        model.traverse(ob=>{
+          if(ob.isObject3D) ob.castShadow = true;
+        })
+        model.castShadow = model.receiveShadow = true
                 
         for(var j = 0; j < amounttrees; j++){
 
@@ -273,12 +367,33 @@ function loadScene()
 
     createAgent( );
     createTrees( );
+    createAsteroids( );
     console.log(trees)
     
     scene.add( new THREE.AxesHelper(3) );
 
     createRewards ( )
 }
+
+
+function loadPhysicalWorld()
+ {
+   // Mundo 
+    world = new CANNON.World({
+                gravity: new CANNON.Vec3(0,-9.8,0)
+               }); 
+    
+    const ground = new CANNON.Body({ 
+              shape: new CANNON.Plane(),
+              mass: 0, 
+              material: groundMaterial
+              });
+    ground.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0),-Math.PI/2);
+    // ground.position.set(0,-4.8,0)
+
+    world.addBody(ground);
+    world.addContactMaterial(asteroidGroundContact)
+ }
  
 function checkCenter(){
 
@@ -287,6 +402,7 @@ function checkCenter(){
   // check movement towards upper row
   if (bicho.position.x > continouosFloor[1][1].position.x + (lim>>1) ){
     
+    centerChanged = true
     //update position of lower row
     for(var i = 0; i < 3; i++)
       continouosFloor[2][i].position.x = continouosFloor[0][i].position.x + lim
@@ -294,12 +410,12 @@ function checkCenter(){
 
     for(var i = 2; i > 0; i --)
     [continouosFloor[i], continouosFloor[i-1]] = [continouosFloor[i-1], continouosFloor[i]]
-    console.log('ur')
   }
 
   // check movement towards lower row
   if (bicho.position.x < continouosFloor[1][1].position.x - (lim>>1) ){
     
+    centerChanged = true
     //update position of lower row
     for(var i = 0; i < 3; i++)
       continouosFloor[0][i].position.x = continouosFloor[2][i].position.x - lim
@@ -307,12 +423,12 @@ function checkCenter(){
 
     for(var i = 0; i < 2; i ++)
     [continouosFloor[i], continouosFloor[i+1]] = [continouosFloor[i+1], continouosFloor[i]]
-    console.log('lr')
   }
 
   // check movement towards right column
   if (bicho.position.z > continouosFloor[1][1].position.z + (lim>>1) ){
     
+    centerChanged = true
     //update position of lower row
     for(var i = 0; i < 3; i++)
       continouosFloor[i][0].position.z = continouosFloor[i][2].position.z + lim
@@ -321,14 +437,12 @@ function checkCenter(){
     for(var i = 0; i < continouosFloor.length; i++)
       for(var j = 0; j < 2; j ++)
         [continouosFloor[i][j], continouosFloor[i][j+1]] = [continouosFloor[i][j+1], continouosFloor[i][j]]
-    console.log('rc')
   }
 
   // check movement towards left column
   if (bicho.position.z < continouosFloor[1][1].position.z - (lim>>1) ){
-
-    console.log(bicho.position.z, continouosFloor[1][1].position.z)
-    
+ 
+    centerChanged = true
     //update position of lower row
     for(var i = 0; i < 3; i++)
       continouosFloor[i][2].position.z = continouosFloor[i][0].position.z - lim
@@ -337,7 +451,6 @@ function checkCenter(){
     for(var i = 0; i < continouosFloor.length; i++)
       for(var j = 2; j > 0; j --)
         [continouosFloor[i][j], continouosFloor[i][j-1]] = [continouosFloor[i][j-1], continouosFloor[i][j]]
-    console.log('lc')
   }
 }
 
@@ -360,7 +473,7 @@ function updateObjectsPosition (){
   for(var i = 0; i < coins.length; i++)
     if(Math.hypot(bicho.position.x - coins[i].position.x, bicho.position.z - coins[i].position.z)  > visionrange){
       const pos = getNewRewardPosition(bicho.position.x, bicho.position.z)
-      coins[i].position.set(pos[0], 0, pos[1])
+      coins[i].position.set(pos[0], 2, pos[1])
     }
 
   for(var i = 0; i < trees.length; i++)
@@ -374,6 +487,8 @@ function updateObjectsPosition (){
 function update(){ 
 
   speed = 0.0;
+
+  stats.update()
   
   if ( keys.w ){
 
@@ -381,7 +496,8 @@ function update(){
       bicho.rotateY(Math.PI)
       backwalk ^= 1
     }
-    speed = 0.07;
+    speed = 0.09;
+    // speed = 0.07;
   }
   else if ( keys.s ){
 
@@ -389,7 +505,7 @@ function update(){
       bicho.rotateY(Math.PI)
       backwalk ^= 1
     }
-    speed = 0.04;
+    speed = 0.06;
   }
 
   if(velocity > 1e-3 && isIdle){ 
@@ -406,8 +522,7 @@ function update(){
     const clip = THREE.AnimationClip.findByName(clips, 'Armature|Idle  ');
     mixers[0].stopAllAction()
     const action = mixers[0].clipAction(clip);
-    action.play();  
-    console.log(bicho.position)
+    action.play();
     isIdle ^= 1
   }
   
@@ -441,9 +556,29 @@ function update(){
   dir.copy( a ).sub( b ).normalize();
   const dis = a.distanceTo( b ) - 0.3;
   goal.position.addScaledVector( dir, dis  );
+  lightPosition.addScaledVector( dir, dis  );
+
+  if(centerChanged){
+    centerChanged ^=1
+    light.position.set(lightPosition.x, lightPosition.y, lightPosition.z)
+    
+    light.target.position.setX(bicho.position.x)
+    light.target.position.setY(bicho.position.y)
+    light.target.position.setZ(bicho.position.z)
+  }
   
   camera.lookAt( bicho.position );
+  world.fixedStep()	
 
+  for(let i = 0; i < asteroids_anchor.length; i++){
+      asteroids[i].position.copy(asteroids_anchor[i].position);
+      
+      asteroids[i].position.set(asteroids_anchor[i].position.x-1, asteroids_anchor[i].position.y-3, asteroids_anchor[i].position.z-6)
+      // asteroids[i].quaternion.copy( asteroids_anchor[i].quaternion );
+
+      if(asteroids_anchor[i].position.y < 8 && timeGround[i] > 1e-3 && squaredDistance(asteroids_anchor[i].position) < 10**2)
+      console.log('murio')
+  }  
 }
 
 function updateAspectRatio()
@@ -455,13 +590,39 @@ function updateAspectRatio()
   camera.updateProjectionMatrix();
 
 }
+function squaredDistance(b) {
+  return (bicho.position.x - b.x + 1 )**2 + (bicho.position.y - b.y + 3)**2 +(bicho.position.z - b.z + 6)**2
+}
 
 function update_animation(time){
 
   for(var i = 0; i < coins.length; i++)
     coins[i].rotation.y += 0.01
-
+  
   const delta = clock.getDelta();
+
+  
+  for(let i = 0; i < asteroids_anchor.length; i++){
+
+    if(asteroids_anchor[i].position.y < 6 && timeGround[i] == -1){
+      timeGround[i] = delta
+    }
+    else if(asteroids_anchor[i].position.y < 6){
+      timeGround[i] += delta
+
+      if(squaredDistance(asteroids_anchor[i].position) < 10**2)
+        console.log('murio')
+    }
+    
+    if(timeGround[i] > resetime){
+      timeGround[i] = -1
+      let pos = getNewAsteroidPosition(bicho.position.x, bicho.position.z)
+      asteroids_anchor[i].position.set(pos[0], 300, pos[1])
+      asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0, - Math.random()*100, 0))
+      asteroids_anchor[i].angularVelocity.set(0.2, 0, 0)  
+    }
+  }
+
   mixers.forEach(function(mixer) {
       mixer.update(delta);
   });
