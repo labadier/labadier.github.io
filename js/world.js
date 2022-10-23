@@ -4,8 +4,12 @@ import * as SkeletonUtils from '../lib/SkeletonUtils.js';
 import * as CANNON from '../lib/cannon-es.js'; 
 import Stats from "../lib/stats.module.js";
 
+
+let running = false
+
 let light;
-let avelrange = 100, resetime = 4
+let GlobalTimer = 0;
+let avelrange = 200, resetime = 4
 let groundMaterial, asteroidsMaterial;
 let asteroidGroundContact;
 
@@ -34,6 +38,8 @@ let dir = new THREE.Vector3;
 let a = new THREE.Vector3;
 let b = new THREE.Vector3;
 let backwalk, record = 0
+let recordlogger, levellogger, scoremMltiplier = 1, level = 0
+let GOrecordlogger, GOlevellogger, GOPanel
 
 let world
 
@@ -42,6 +48,61 @@ init();
 loadScene();
 loadPhysicalWorld();
 render();
+
+function gameOver(){
+
+  GOrecordlogger.innerText = record
+  GOlevellogger.innerText = level
+
+  running = false
+  GlobalTimer = 0
+  avelrange = 200
+  resetime = 4
+
+  keys = {
+    a: false,
+    s: false,
+    d: false,
+    w: false
+  };
+  scoremMltiplier = 1
+  level = 0 
+  backwalk = 0
+  record = 0
+  dir = new THREE.Vector3;
+  velocity = speed = 0.0;
+
+
+  isIdle = true
+  centerChanged = true
+
+  setTimeout(() =>{
+
+    for(var i = 0; i < amountreward; i++){
+        
+      let pos = getNewRewardPosition(0, 0)
+      coins[i].position.set(pos[0], 2, pos[1])
+    }
+
+    for(var i = 0; i < amountasteroids; i++){
+    
+      timeGround[i] =-1
+      asteroids_anchor[i].angularDamping = 0.9
+      asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0,  Math.random()*300, 0))
+      let pos = relocateTreePosition(bicho.position.x, bicho.position.z)
+      asteroids_anchor[i].position.set(pos[0], 500, pos[1])
+    }
+
+
+    GOPanel.style.display = 'grid'
+
+    const clip = THREE.AnimationClip.findByName(clips, 'Armature|Idle  ');
+    mixers[0].stopAllAction()
+    const action = mixers[0].clipAction(clip);
+    action.play();
+  }, 1000)
+  
+}
 
 function addLighting(scene) {
   
@@ -71,70 +132,92 @@ function addLighting(scene) {
 
 function init()
 {
-    // Instanciar el motor de render
-    renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth,window.innerHeight);  
-    clock = new THREE.Clock();
-    renderer.shadowMap.enabled = true;
-    renderer.antialias = true;
+  // Instanciar el motor de render
+  renderer = new THREE.WebGLRenderer();
+  renderer.setSize(window.innerWidth,window.innerHeight);  
+  clock = new THREE.Clock();
+  renderer.shadowMap.enabled = true;
+  renderer.antialias = true;
 
-    groundMaterial = new CANNON.Material()
-    asteroidsMaterial = new CANNON.Material()
-    asteroidGroundContact = new CANNON.ContactMaterial(
-      groundMaterial,
-      asteroidsMaterial,
-      {
-      restitution:0,
-      friction:12}
-    )
+  groundMaterial = new CANNON.Material()
+  asteroidsMaterial = new CANNON.Material()
+  asteroidGroundContact = new CANNON.ContactMaterial(
+    groundMaterial,
+    asteroidsMaterial,
+    {
+    restitution:0,
+    friction:12}
+  )
+  
+
+  stats = Stats()
+  // document.body.appendChild(stats.dom)
+
+  renderer.setClearColor(new THREE.Color(0.7,0.7,0.7));
+
+  document.getElementById('container').appendChild( renderer.domElement );
+
+  // Instanciar el nodo raiz de la escena
+  scene = new THREE.Scene();
+  addLighting(scene)
+
+  // Instanciar la camara
+  camera= new THREE.PerspectiveCamera(90 ,window.innerWidth/window.innerHeight,1,visionrange*5);
+  camera.position.set(15, 15, 3);
+  // camera.position.set(30, 2, 3);
+  // camera.position.set(300, 450, 500);
+  
+  camera.lookAt(0,0,0);
+  // camera.lookAt(0,20,0);
+  
+  backwalk = false
+  goal = new THREE.Object3D;
+  goal.position.z = -0.3;
+  goal.add( camera );
+
+  keys = {
+    a: false,
+    s: false,
+    d: false,
+    w: false
+  };
+
+  document.body.addEventListener( 'keydown', function(e) {
+  
+    var key = e.code.replace('Key', '').toLowerCase();
+    if ( keys[ key ] !== undefined )
+      keys[ key ] = true;
     
-
-    stats = Stats()
-    document.body.appendChild(stats.dom)
-
-    renderer.setClearColor(new THREE.Color(0.7,0.7,0.7));
-
-    document.getElementById('container').appendChild( renderer.domElement );
-
-    // Instanciar el nodo raiz de la escena
-    scene = new THREE.Scene();
-    addLighting(scene)
-
-    // Instanciar la camara
-    camera= new THREE.PerspectiveCamera(90 ,window.innerWidth/window.innerHeight,1,visionrange*5);
-    camera.position.set(15, 15, 3);
-    // camera.position.set(30, 2, 3);
-    // camera.position.set(300, 450, 500);
+  });
+  document.body.addEventListener( 'keyup', function(e) {
     
-    camera.lookAt(0,0,0);
-    // camera.lookAt(0,20,0);
+    var key = e.code.replace('Key', '').toLowerCase();
+    if ( keys[ key ] !== undefined )
+      keys[ key ] = false;
     
-    backwalk = false
-    goal = new THREE.Object3D;
-    goal.position.z = -0.3;
-    goal.add( camera );
+  });
 
-    keys = {
-      a: false,
-      s: false,
-      d: false,
-      w: false
-    };
+  document.getElementById('start-button').onclick = () =>{
+    running = true
+    document.getElementById('intro-panel').style.display = 'none'
+    render()
+  };
 
-    document.body.addEventListener( 'keydown', function(e) {
-    
-      var key = e.code.replace('Key', '').toLowerCase();
-      if ( keys[ key ] !== undefined )
-        keys[ key ] = true;
-      
-    });
-    document.body.addEventListener( 'keyup', function(e) {
-      
-      var key = e.code.replace('Key', '').toLowerCase();
-      if ( keys[ key ] !== undefined )
-        keys[ key ] = false;
-      
-    });
+  document.getElementById('restart-button').onclick = () =>{
+    running = true
+    GOPanel.style.display  = 'none'
+    render()
+  };
+
+  recordlogger = document.getElementById('score')
+  levellogger = document.getElementById('level')
+  recordlogger.innerText = record
+  levellogger.innerText = level
+
+
+  GOrecordlogger = document.getElementById('game-over-score')
+  GOlevellogger = document.getElementById('game-over-level')
+  GOPanel =  document.getElementById('game-over-panel')
   
   window.addEventListener('resize', updateAspectRatio );
 }
@@ -207,9 +290,8 @@ function getNewAsteroidPosition ( x, z){
   let nx, nz  
   [nx, nz] = [x, z]
 
-  nx = x + generationrange/3 - Math.floor(Math.random() * generationrange*2/3);
-  nz = z + generationrange/3 - Math.floor(Math.random() * generationrange*2/3);
-  
+  nx = x + avelrange - Math.floor(Math.random() * avelrange*2);
+  nz = z + avelrange - Math.floor(Math.random() * avelrange*2);
   
   return [nx, nz]
 }
@@ -369,9 +451,6 @@ function loadScene()
     createAgent( );
     createTrees( );
     createAsteroids( );
-    console.log(trees)
-    
-    scene.add( new THREE.AxesHelper(3) );
 
     createRewards ( )
 }
@@ -465,8 +544,9 @@ function checkCarrotInteraction (){
 
       const pos = getNewRewardPosition(bicho.position.x, bicho.position.z)
       coins[i].position.set(pos[0], 2, pos[1])
-      record ++;
-      console.log(record)
+      record += scoremMltiplier;
+      recordlogger.innerText = record
+      // console.log(record)
     }
 }
 
@@ -498,7 +578,7 @@ function update(){
       bicho.rotateY(Math.PI)
       backwalk ^= 1
     }
-    speed = 0.09;
+    speed = 0.2;
     // speed = 0.07;
   }
   else if ( keys.s ){
@@ -507,7 +587,7 @@ function update(){
       bicho.rotateY(Math.PI)
       backwalk ^= 1
     }
-    speed = 0.06;
+    speed = 0.1;
   }
 
   if(velocity > 1e-3 && isIdle){ 
@@ -579,7 +659,7 @@ function update(){
       // asteroids[i].quaternion.copy( asteroids_anchor[i].quaternion );
 
       if(asteroids_anchor[i].position.y < 8 && timeGround[i] > 1e-3 && squaredDistance(asteroids_anchor[i].position) < 10**2)
-      console.log('murio')
+      gameOver();
   }  
 }
 
@@ -602,6 +682,15 @@ function update_animation(time){
     coins[i].rotation.y += 0.01
   
   const delta = clock.getDelta();
+  GlobalTimer += delta
+
+  if(Math.floor(GlobalTimer/30) < Math.floor((GlobalTimer + delta)/30) ){
+    avelrange = Math.max(50, avelrange-20)
+    scoremMltiplier ++
+    level ++;
+    levellogger.innerText = level
+    console.log('level up')
+  }
 
   
   for(let i = 0; i < asteroids_anchor.length; i++){
@@ -621,7 +710,7 @@ function update_animation(time){
       let pos = getNewAsteroidPosition(bicho.position.x, bicho.position.z)
       asteroids_anchor[i].position.set(pos[0], 150, pos[1])
       asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0, - Math.random()*100, 0))
-      asteroids_anchor[i].angularVelocity.set(0.2, 0, 0)  
+      asteroids_anchor[i].angularVelocity.set(0, 0, 0)  
     }
   }
 
@@ -633,6 +722,8 @@ function update_animation(time){
 
 function render()
 {
+    if(!running)
+      return
     requestAnimationFrame(render);
     update();
     update_animation();
