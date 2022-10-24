@@ -1,188 +1,702 @@
-/**
-  test.js
-  Ejemplo Three.js_r140: Cubo RGB con iluminacion y textura
+import * as THREE from '../lib/three.module.js';
+import {GLTFLoader} from '../lib/GLTFLoader.module.js';
+import * as SkeletonUtils from '../lib/SkeletonUtils.js';
+import * as CANNON from '../lib/cannon-es.js'; 
+import Stats from "../lib/stats.module.js";
 
-  Cubo con color por vertice y mapa de uvs usando la clase BufferGeometry.
-  La textura es una unica imagen en forma de cubo desplegado en cruz horizontal.
-  Cada cara se textura segun mapa uv en la textura.
-  En sentido antihorario las caras son:
-    Delante:   7,0,3,4
-    Derecha:   0,1,2,3
-    Detras:    1,6,5,2
-    Izquierda: 6,7,4,5
-    Arriba:    3,2,5,4
-    Abajo:     0,7,6,1
-  Donde se han numerado de 0..7 los ertices del cubo.
-  Los atributos deben darse por vertice asi que necesitamos 8x3=24 vertices pues
-  cada vertice tiene 3 atributos de normal, color y uv al ser compartido por 3 caras. 
 
-  @author rvivo@upv.es (c) Libre para fines docentes
-*/
+let running = true
 
-var renderer, scene, camera, cubo;
-var cameraControls;
-var angulo = -0.01;
+let mixers_asteroid = []
 
+let light;
+let GlobalTimer = 0;
+let avelrange = 200, resetime = 4
+let groundMaterial, asteroidsMaterial;
+let asteroidGroundContact;
+
+let stats;
+
+let renderer, scene, camera, bicho, goal, keys, sky, coins = []
+let asteroids = [], asteroids_anchor = [];
+let mixers = [], clock, clips, isIdle, bicho_actions = {}, trees = []
+const amountreward = 150
+const amounttrees = 60
+const amountasteroids = 1
+const lim = 600, continouosFloor = new Array(3)
+
+let centerChanged = true
+let lightPosition = new THREE.Vector3;
+
+let timeGround = []
+
+// Otras globales
+let velocity = 0.0;
+let speed = 0.0;
+const visionrange = 500;
+const generationrange = 550
+
+let dir = new THREE.Vector3;
+let a = new THREE.Vector3;
+let b = new THREE.Vector3;
+let backwalk, record = 0
+let recordlogger, levellogger, scoremMltiplier = 1, level = 0
+let GOrecordlogger, GOlevellogger, GOPanel
+
+let world
+
+// Acciones
 init();
-loadCubo(1.0);
+loadScene();
+loadPhysicalWorld();
 render();
+
+function detectCollisionCubes(object1, object2){
+
+  console.log(object1)
+  object1.geometry.computeBoundingBox(); //not needed if its already calculated
+  object2.geometry.computeBoundingBox();
+  object1.updateMatrixWorld();
+  object2.updateMatrixWorld();
+  
+  var box1 = object1.geometry.boundingBox.clone();
+  box1.applyMatrix4(object1.matrixWorld);
+
+  var box2 = object2.geometry.boundingBox.clone();
+  box2.applyMatrix4(object2.matrixWorld);
+
+  console.log(box1.intersectsBox(box2));
+}
+
+function addLighting(scene) {
+  
+  light = new THREE.DirectionalLight(0xFFFFFF, 0.8);
+  light.position.set(300, 800, 300);
+  lightPosition.set(300, 800, 300);
+  // light.position.set(300, 400, 300);
+
+  light.shadow.camera.top = 2*visionrange;
+  light.shadow.camera.left = -2*visionrange;
+  light.shadow.camera.far = 1800;
+  light.shadow.camera.right = 2*visionrange;
+  light.shadow.camera.bottom = -2*visionrange;
+  light.shadow.penumbra = 0.5
+  light.castShadow = true;
+
+  light.target.position.set(0, 0, 0);
+  
+  var ambiColor = "rgb(200, 200, 200 )";
+  var ambientLight = new THREE.AmbientLight(ambiColor);
+
+  scene.add(light);
+  scene.add( light.target )
+  scene.add(ambientLight);
+  // scene.add(new THREE.CameraHelper(light.shadow.camera))
+}
 
 function init()
 {
+  // Instanciar el motor de render
   renderer = new THREE.WebGLRenderer();
-  renderer.setSize( window.innerWidth, window.innerHeight );
-  renderer.setClearColor( new THREE.Color(0xFFFFFF) );
+  renderer.setSize(window.innerWidth,window.innerHeight);  
+  clock = new THREE.Clock();
+  renderer.shadowMap.enabled = true;
+  renderer.antialias = true;
+
+  groundMaterial = new CANNON.Material()
+  asteroidsMaterial = new CANNON.Material()
+  asteroidGroundContact = new CANNON.ContactMaterial(
+    groundMaterial,
+    asteroidsMaterial,
+    {
+    restitution:0,
+    friction:12}
+  )
+  
+
+  stats = Stats()
+  // document.body.appendChild(stats.dom)
+
+  renderer.setClearColor(new THREE.Color(0.7,0.7,0.7));
+
   document.getElementById('container').appendChild( renderer.domElement );
 
+  // Instanciar el nodo raiz de la escena
   scene = new THREE.Scene();
+  addLighting(scene)
 
-  var aspectRatio = window.innerWidth / window.innerHeight;
-  camera = new THREE.PerspectiveCamera( 50, aspectRatio , 0.1, 100 );
-  camera.position.set( 1, 1.5, 2 );
+  // Instanciar la camara
+  camera= new THREE.PerspectiveCamera(90 ,window.innerWidth/window.innerHeight,1,visionrange*5);
+  // camera.position.set(15, 15, 3);
+  camera.position.set(20, 10, 3);
+  // camera.position.set(300, 450, 500);
+  
   camera.lookAt(0,0,0);
+  // camera.lookAt(0,20,0);
+  
+  backwalk = false
+  goal = new THREE.Object3D;
+  goal.position.z = -0.3;
+  goal.add( camera );
 
-  cameraControls = new THREE.OrbitControls( camera, renderer.domElement );
-  cameraControls.target.set( 0, 0, 0 );
+  keys = {
+    a: false,
+    s: false,
+    d: false,
+    w: false
+  };
 
+  document.body.addEventListener( 'keydown', function(e) {
+  
+    var key = e.code.replace('Key', '').toLowerCase();
+    if ( keys[ key ] !== undefined )
+      keys[ key ] = true;
+    
+  });
+  document.body.addEventListener( 'keyup', function(e) {
+    
+    var key = e.code.replace('Key', '').toLowerCase();
+    if ( keys[ key ] !== undefined )
+      keys[ key ] = false;
+    
+  }); 
+
+  recordlogger = document.getElementById('score')
+  levellogger = document.getElementById('level')
+  recordlogger.innerText = record
+  levellogger.innerText = level
+
+
+  GOrecordlogger = document.getElementById('game-over-score')
+  GOlevellogger = document.getElementById('game-over-level')
+  GOPanel =  document.getElementById('game-over-panel')
+  
   window.addEventListener('resize', updateAspectRatio );
 }
 
-function loadCubo(lado)
+
+function createMaterialArray() {
+
+  const skyboxImagepaths = ["ft", "bk", "up", "dn", "rt", "lf"].map(side => {
+      return  "images/skybox/sh_" + side + '.png';
+  });
+
+  const materialArray = skyboxImagepaths.map(image => {
+    let texture = new THREE.TextureLoader().load(image);
+    return new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+  });
+  
+  return materialArray;
+}
+
+function createContinuousFloor(){
+
+
+  let floor_texture = new THREE.TextureLoader().load( 'images/suelo.jpg');
+  floor_texture.wrapS = floor_texture.wrapT = THREE.RepeatWrapping;
+  floor_texture.repeat.set(8*lim/100, 8*lim/100);
+  floor_texture = new THREE.MeshStandardMaterial({map: floor_texture});
+
+  for(var i = 0; i < 3; i ++)
+    continouosFloor[i] = new Array(3)
+
+  continouosFloor[1][1] = new THREE.Mesh( new THREE.PlaneGeometry(lim,lim), floor_texture );
+  continouosFloor[1][1].rotation.x = -Math.PI/2;
+  continouosFloor[1][1].receiveShadow = true;
+
+  // scene.add(continouosFloor[1][1]);
+  
+  const mf = [-1, -1, -1, 0, 0, 1, 1, 1]
+  const mc = [-1, 0, 1, -1, 1, -1, 0, 1]
+
+  // const clsr  = ['yellow', 'yellow', 'red', 'green', 'blue', 'skyblue', 'red', 'green', 'blue', 'yellow', 'red', 'green', 'blue']
+
+  for(var i = 0; i < mf.length; i++){
+
+    const nf = 1 + mf[i];
+    const nc = 1 + mc[i];
+    continouosFloor[nf][nc] = continouosFloor[1][1].clone()
+    continouosFloor[nf][nc].position.x = -lim*mf[i]
+    continouosFloor[nf][nc].position.z = lim*mc[i]
+        
+    // scene.add(continouosFloor[nf][nc])
+  } 
+}
+
+function getNewRewardPosition ( x, z){
+
+  let nx, nz  
+  [nx, nz] = [x, z]
+
+  const radius = 3
+  while (nx < x + radius && nx > x - radius && nz < z + radius && nz > z - radius){
+    nx = x + generationrange - Math.floor(Math.random() * generationrange * 2);
+    nz = z + generationrange - Math.floor(Math.random() * generationrange * 2);
+  }
+  
+  return [nx, nz]
+}
+
+function getNewAsteroidPosition ( x, z){
+
+  let nx, nz  
+  [nx, nz] = [x, z]
+
+  nx = x + avelrange - Math.floor(Math.random() * avelrange*2);
+  nz = z + avelrange - Math.floor(Math.random() * avelrange*2);
+  
+  return [nx, nz]
+}
+
+function relocateTreePosition ( x, z ){
+
+  let nx, nz  
+
+  
+  let angle = Math.PI*2*Math.random()
+  let distance = visionrange + Math.random()*(generationrange - visionrange )
+
+  nx = distance*Math.sin(angle)
+  nz = distance*Math.cos(angle)
+
+  return [x + nx, z + nz]
+}
+
+function createRewards ( ){
+
+  let model;
+  const loader = new GLTFLoader()
+    loader.load( 'models/carrot/scene.gltf', function ( gltf ) {
+
+        model = gltf.scene
+
+        model.scale.set(4,4, 4);
+        model.rotateZ(-Math.PI/9)
+
+        let pos
+        for(var i = 0; i < amountreward; i++){
+          
+          coins.push(model.clone())
+          pos = getNewRewardPosition(0, 0)
+          coins[i].position.set(pos[0], 2, pos[1])
+          // scene.add(coins[i])
+        }
+                      
+      }, undefined, function(error) {
+        console.error(error);
+    });
+}
+
+function createAsteroids ( ){
+
+  let model;
+  const loader = new GLTFLoader()
+    loader.load( 'models/energy_sphere/scene.gltf', function ( gltf ) {
+
+        const model = SkeletonUtils.clone(gltf.scene)
+        model.scale.set(3.5, 3.5, 3.5)
+        
+        
+        const clip = THREE.AnimationClip.findByName(gltf.animations, 'Take 001');
+        const puntual = new THREE.PointLight(0xFFFFFF,1);
+        puntual.position.set(0,3.5,0);
+        scene.add(puntual);
+        
+        
+       
+        for(var i = 0; i < amountasteroids; i++){
+          
+          // asteroids.push(new THREE.Mesh( new THREE.BoxGeometry(10,10, 10)))
+          // asteroids[i].add(model.clone())
+          asteroids.push(model.clone())
+
+          const mixer = new THREE.AnimationMixer(asteroids[i]);
+          const action = mixer.clipAction(clip);
+          action.play();
+          mixers_asteroid.push(mixer)
+
+          timeGround.push(-1)
+          asteroids_anchor.push(new CANNON.Body({ 
+                            shape: new CANNON.Sphere(3.5),
+                            mass: 1e-4, 
+                            // material: asteroidsMaterial,
+                          }))
+
+
+          // asteroids_anchor[i].angularVelocity.set(0.2, 0, 0)
+          asteroids_anchor[i].angularDamping = 0.9
+          // asteroids_anchor[i].lienarDamping = 0.9
+
+          asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0,  -Math.random()*10, 0))
+           
+          asteroids_anchor[i].position.set(0, 20 ,0)
+
+          scene.add(asteroids[i])
+          world.addBody(asteroids_anchor[i])
+        }
+                      
+      }, undefined, function(error) {
+        console.error(error);
+    });
+  
+}
+
+function createTrees ( ){
+
+  let model, pos
+  const sizes = [ 0.1] //4
+  const models = ['pine_tree']
+
+  for(let i = 0; i < models.length; i++){
+    
+    const loader = new GLTFLoader()
+    loader.load( 'models/' + models[i] + '/scene.gltf', function ( gltf ) {
+
+        model = gltf.scene
+        model.scale.set(sizes[i], sizes[i], sizes[i]);
+        
+        model.traverse(ob=>{
+          if(ob.isObject3D) ob.castShadow = true;
+        })
+        model.castShadow = model.receiveShadow = true
+                
+        for(var j = 0; j < amounttrees; j++){
+
+          trees.push(model.clone())
+          pos = getNewRewardPosition(0, 0)
+          trees[trees.length - 1].position.set(pos[0], 0, pos[1])
+          // scene.add(trees[trees.length - 1])
+        }
+                      
+      }, undefined, function(error) {
+        console.error(error);
+    });
+  }  
+}
+
+function createAgent( ){
+
+  bicho = new THREE.Object3D();
+
+    const loader = new GLTFLoader()
+    loader.load( 'models/hare_animated/scene.gltf', function ( gltf ) {
+      const model = SkeletonUtils.clone(gltf.scene) ;
+
+      const mixer = new THREE.AnimationMixer(model);
+      clips = gltf.animations;
+      
+      const clip = THREE.AnimationClip.findByName(clips, 'Armature|Idle  ');
+      const action = mixer.clipAction(clip);
+      bicho_actions['Armature|Idle  '] = action
+      action.play();
+      mixers.push(mixer);
+      bicho.add(model)
+
+    }, undefined, function(error) {
+      console.error(error);
+  });
+  
+  isIdle = true
+  bicho.rotateY(-Math.PI/2)
+  scene.add(bicho)
+}
+
+
+function loadScene()
 {
-  // Instancia el objeto BufferGeometry
-	var malla = new THREE.BufferGeometry();
-  // Construye la lista de coordenadas y colores por vertice
-  var semilado = lado/2.0;
-  var coordenadas = [ // 6caras x 4vert x3coor = 72float
-                // Front 
-                -semilado,-semilado, semilado, // 7 -> 0
-                semilado,-semilado, semilado,  // 0 -> 1
-                semilado, semilado, semilado,  // 3 -> 2
-                -semilado, semilado, semilado, // 4 -> 3
-                // Right
-                semilado,-semilado, semilado,  // 0 -> 4
-                semilado,-semilado,-semilado,  // 1 -> 5
-                semilado, semilado,-semilado,  // 2 -> 6
-                semilado, semilado, semilado,  // 3 -> 7
-                // Back
-                semilado,-semilado,-semilado,  // 1 -> 8
-                -semilado,-semilado,-semilado, // 6 -> 9
-                -semilado, semilado,-semilado, // 5 ->10
-                semilado, semilado,-semilado,  // 2 ->11
-                // Left
-                -semilado,-semilado,-semilado, // 6 ->12
-                -semilado,-semilado, semilado, // 7 ->13
-                -semilado, semilado, semilado, // 4 ->14
-                -semilado, semilado,-semilado, // 5 ->15
-                // Top
-                semilado, semilado, semilado,  // 3 ->16
-                semilado, semilado,-semilado,  // 2 ->17
-                -semilado, semilado,-semilado, // 5 ->18
-                -semilado, semilado, semilado, // 4 ->19
-                // Bottom
-                semilado,-semilado, semilado,  // 0 ->20
-                -semilado,-semilado, semilado, // 7 ->21 
-                -semilado,-semilado,-semilado, // 6 ->22
-                semilado,-semilado,-semilado   // 1 ->23
-  ]
-  var colores = [ // 24 x3
-                0,0,0,   // 7
-                1,0,0,   // 0
-                1,1,0,   // 3
-                0,1,0,   // 4
+    
+    createContinuousFloor()
 
-                1,0,0,   // 0
-                1,0,1,   // 1
-                1,1,1,   // 2
-                1,1,0,   // 3
+    var skyGeo = new THREE.BoxGeometry(800, 800, 800, 1, 1,1); 
+    sky = new THREE.Mesh(skyGeo);
+    const skyMaterial = createMaterialArray()
+    sky.material = skyMaterial
+    // scene.add(sky);
 
-                1,0,1,   // 1
-                0,0,1,   // 6
-                0,1,1,   // 5
-                1,1,1,   // 2
 
-                1,1,0,   // 3
-                0,0,0,   // 7
-                0,1,0,   // 4
-                0,1,1,   // 5
+    createAgent( );
+    createTrees( );
+    createAsteroids( );
 
-                1,1,0,   // 3
-                1,1,1,   // 2
-                0,1,1,   // 5
-                0,1,0,   // 4
+    createRewards ( )
+}
 
-                1,0,0,   // 0
-                0,0,0,   // 7
-                0,0,1,   // 6
-                1,0,1    // 1
-  ]
-  var normales = [ // 24 x3
-                0,0,1, 0,0,1, 0,0,1, 0,0,1,      // Front
-                1,0,0, 1,0,0, 1,0,0, 1,0,0,      // Right
-                0,0,-1, 0,0,-1, 0,0,-1, 0,0,-1,  // Back 
-                -1,0,0, -1,0,0, -1,0,0, -1,0,0,  // Left
-                0,1,0, 0,1,0, 0,1,0, 0,1,0,      // Top 
-                0,-1,0, 0,-1,0, 0,-1,0, 0,-1,0   // Bottom
-                ];
-  var uvs = [  // 24 x2
-               // Front
-                0/4,1/3 , 1/4,1/3 , 1/4,2/3 , 0/4,2/3 , // 7,0,3,4
-                1/4,1/3 , 2/4,1/3 , 2/4,2/3 , 1/4,2/3 , // 0,1,2,3
-                2/4,1/3 , 3/4,1/3 , 3/4,2/3 , 2/4,2/3 , // 1,6,5,2
-                3/4,1/3 , 4/4,1/3 , 4/4,2/3 , 3/4,2/3 , // 6,7,4,5
-                1/4,2/3 , 2/4,2/3 , 2/4,3/3 , 1/4,3/3 , // 3,2,5,4
-                1/4,1/3 , 1/4,0/3 , 2/4,0/3 , 2/4,1/3   // 0,7,6,1
-            ];
-  var indices = [ // 6caras x 2triangulos x3vertices = 36
-              0,1,2,    2,3,0,    // Front
-              4,5,6,    6,7,4,    // Right 
-              8,9,10,   10,11,8,  // Back
-              12,13,14, 14,15,12, // Left
-              16,17,18, 18,19,16, // Top
-              20,21,22, 22,23,20  // Bottom
-                 ];
 
-  scene.add( new THREE.DirectionalLight() );
+function loadPhysicalWorld()
+ {
+   // Mundo 
+    world = new CANNON.World({
+                gravity: new CANNON.Vec3(0,-9.8,0)
+               }); 
+    
+    const ground = new CANNON.Body({ 
+              shape: new CANNON.Plane(),
+              mass: 0, 
+              material: groundMaterial,
+              restitution:0,
+              });
+    ground.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0),-Math.PI/2);
+    // ground.position.set(0,-4.8,0)
 
-  // Geometria por att arrays en r140
-  malla.setIndex( indices );
-  malla.setAttribute( 'position', new THREE.Float32BufferAttribute(coordenadas,3));
-  malla.setAttribute( 'normal', new THREE.Float32BufferAttribute(normales,3));
-  malla.setAttribute( 'color', new THREE.Float32BufferAttribute(colores,3));
-  malla.setAttribute( 'uv', new THREE.Float32BufferAttribute(uvs,2));
+    world.addBody(ground);
+    world.addContactMaterial(asteroidGroundContact)
+ }
+ 
+function checkCenter(){
 
-  // Configura un material
-  var textura = new THREE.TextureLoader().load( 'images/ilovecg.png' );
-  var material = new THREE.MeshLambertMaterial( { vertexColors: true, map: textura, side: THREE.DoubleSide } );
+/// swap 9x9 matrix of continuous floe
+ 
+  // check movement towards upper row
+  if (bicho.position.x > continouosFloor[1][1].position.x + (lim>>1) ){
+    
+    centerChanged = true
+    //update position of lower row
+    for(var i = 0; i < 3; i++)
+      continouosFloor[2][i].position.x = continouosFloor[0][i].position.x + lim
+    //swap rows to mantain 9x9 matrix intuition
 
-  // Construye el objeto grafico 
-  console.log(malla);   //-> Puedes consultar la estructura del objeto
-  cubo = new THREE.Mesh( malla, material );
+    for(var i = 2; i > 0; i --)
+    [continouosFloor[i], continouosFloor[i-1]] = [continouosFloor[i-1], continouosFloor[i]]
+  }
 
-	// Añade el objeto grafico a la escena
-	scene.add( cubo );
+  // check movement towards lower row
+  if (bicho.position.x < continouosFloor[1][1].position.x - (lim>>1) ){
+    
+    centerChanged = true
+    //update position of lower row
+    for(var i = 0; i < 3; i++)
+      continouosFloor[0][i].position.x = continouosFloor[2][i].position.x - lim
+    //swap rows to mantain 9x9 matrix intuition
+
+    for(var i = 0; i < 2; i ++)
+    [continouosFloor[i], continouosFloor[i+1]] = [continouosFloor[i+1], continouosFloor[i]]
+  }
+
+  // check movement towards right column
+  if (bicho.position.z > continouosFloor[1][1].position.z + (lim>>1) ){
+    
+    centerChanged = true
+    //update position of lower row
+    for(var i = 0; i < 3; i++)
+      continouosFloor[i][0].position.z = continouosFloor[i][2].position.z + lim
+    
+      //swap rows to mantain 9x9 matrix intuition
+    for(var i = 0; i < continouosFloor.length; i++)
+      for(var j = 0; j < 2; j ++)
+        [continouosFloor[i][j], continouosFloor[i][j+1]] = [continouosFloor[i][j+1], continouosFloor[i][j]]
+  }
+
+  // check movement towards left column
+  if (bicho.position.z < continouosFloor[1][1].position.z - (lim>>1) ){
+ 
+    centerChanged = true
+    //update position of lower row
+    for(var i = 0; i < 3; i++)
+      continouosFloor[i][2].position.z = continouosFloor[i][0].position.z - lim
+    
+      //swap rows to mantain 9x9 matrix intuition
+    for(var i = 0; i < continouosFloor.length; i++)
+      for(var j = 2; j > 0; j --)
+        [continouosFloor[i][j], continouosFloor[i][j-1]] = [continouosFloor[i][j-1], continouosFloor[i][j]]
+  }
+}
+
+function checkCarrotInteraction (){
+
+  const close_radius = 2
+  
+  for(var i = 0; i < coins.length; i++)
+    if(Math.hypot(bicho.position.x - coins[i].position.x, bicho.position.z - coins[i].position.z)  < close_radius){
+
+      const pos = getNewRewardPosition(bicho.position.x, bicho.position.z)
+      coins[i].position.set(pos[0], 2, pos[1])
+      record += scoremMltiplier;
+      recordlogger.innerText = record
+      // console.log(record)
+    }
+}
+
+function updateObjectsPosition (){
+
+  for(var i = 0; i < coins.length; i++)
+    if(Math.hypot(bicho.position.x - coins[i].position.x, bicho.position.z - coins[i].position.z)  > visionrange){
+      const pos = getNewRewardPosition(bicho.position.x, bicho.position.z)
+      coins[i].position.set(pos[0], 2, pos[1])
+    }
+
+  for(var i = 0; i < trees.length; i++)
+    if(Math.hypot(bicho.position.x - trees[i].position.x, bicho.position.z - trees[i].position.z)  > generationrange){
+      const pos = relocateTreePosition(bicho.position.x, bicho.position.z)
+      trees[i].position.set(pos[0], 0, pos[1])
+    }
+
+}
+
+function update(){ 
+
+  speed = 0.0;
+
+  stats.update()
+  
+  if ( keys.w ){
+
+    if(backwalk){
+      bicho.rotateY(Math.PI)
+      backwalk ^= 1
+    }
+    speed = 0.2;
+    // speed = 0.07;
+  }
+  else if ( keys.s ){
+
+    if(!backwalk){
+      bicho.rotateY(Math.PI)
+      backwalk ^= 1
+    }
+    speed = 0.1;
+  }
+
+  if(velocity > 1e-3 && isIdle){ 
+    
+    const clip = THREE.AnimationClip.findByName(clips, 'Armature|run ');
+    mixers[0].stopAllAction()
+    const action = mixers[0].clipAction(clip);
+    action.clampWhenFinished = true;
+    action.play(); 
+    isIdle ^= 1
+  }
+  else if(!isIdle && velocity <= 1e-3){
+    
+    const clip = THREE.AnimationClip.findByName(clips, 'Armature|Idle  ');
+    mixers[0].stopAllAction()
+    const action = mixers[0].clipAction(clip);
+    action.play();
+    isIdle ^= 1
+  }
+  
+  velocity += ( speed - velocity ) * .3; 
+  bicho.translateZ( velocity );
+  
+  if(velocity > 1e-3){    
+
+    checkCarrotInteraction();
+    updateObjectsPosition();
+    sky.position.setX(bicho.position.x)
+    sky.position.setY(bicho.position.y)
+    sky.position.setZ(bicho.position.z)
+
+    checkCenter();
+  }
+
+  if ( keys.a ){
+    bicho.rotateY(0.03);
+    goal.rotateY(0.03)
+  }
+  else if ( keys.d ){
+    bicho.rotateY(-0.03);
+    goal.rotateY(-0.03);
+  }
+
+    
+  a.lerp(bicho.position, 0.4);
+  b.copy(goal.position);
+    
+  dir.copy( a ).sub( b ).normalize();
+  const dis = a.distanceTo( b ) - 0.3;
+  goal.position.addScaledVector( dir, dis  );
+  lightPosition.addScaledVector( dir, dis  );
+
+  if(centerChanged){
+    centerChanged ^=1
+    light.position.set(lightPosition.x, lightPosition.y, lightPosition.z)
+    
+    light.target.position.setX(bicho.position.x)
+    light.target.position.setY(bicho.position.y)
+    light.target.position.setZ(bicho.position.z)
+  }
+  
+  camera.lookAt( bicho.position );
+  world.fixedStep()	
+
+  for(let i = 0; i < asteroids_anchor.length; i++){
+      asteroids[i].position.copy(asteroids_anchor[i].position);
+      
+      // asteroids[i].position.set(asteroids_anchor[i].position.x-1, asteroids_anchor[i].position.y-3, asteroids_anchor[i].position.z-6)
+      // asteroids[i].quaternion.copy( asteroids_anchor[i].quaternion );
+
+      // if(asteroids[i].position.y < 8 && timeGround[i] > 1e-3 && squaredDistance(asteroids[i].position) < 10**2)
+      // gameOver();
+      // detectCollisionCubes(asteroids[i], bicho)
+  }  
+  
 }
 
 function updateAspectRatio()
 {
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  camera.aspect = window.innerWidth / window.innerHeight;
+  renderer.setSize(window.innerWidth,window.innerHeight);
+
+  const ar = window.innerWidth/window.innerHeight;
+  camera.aspect = ar;
   camera.updateProjectionMatrix();
+
+}
+function squaredDistance(b) {
+  return (bicho.position.x - b.x + 1 )**2 + (bicho.position.y - b.y + 3)**2 +(bicho.position.z - b.z + 6)**2
 }
 
-function update()
-{
-  // Cambios para actualizar la camara segun mvto del raton
-  cameraControls.update();
+function update_animation(time){
 
-  // Movimiento propio del cubo
-  cubo.rotation.y += angulo;
-  cubo.rotation.x += angulo/2;
+  for(var i = 0; i < coins.length; i++)
+    coins[i].rotation.y += 0.01
+  
+  const delta = clock.getDelta();
+  GlobalTimer += delta
+
+  if(Math.floor(GlobalTimer/30) < Math.floor((GlobalTimer + delta)/30) ){
+    avelrange = Math.max(50, avelrange-20)
+    scoremMltiplier ++
+    level ++;
+    levellogger.innerText = level
+    console.log('level up')
+  }
+
+  
+  for(let i = 0; i < asteroids_anchor.length; i++){
+
+    if(asteroids_anchor[i].position.y < 6 && timeGround[i] == -1){
+      timeGround[i] = delta
+    }
+    else if(asteroids_anchor[i].position.y < 6){
+      timeGround[i] += delta
+
+      if(squaredDistance(asteroids_anchor[i].position) < 10**2)
+        console.log('murio')
+    }
+    
+    if(timeGround[i] > resetime){
+      timeGround[i] = -1
+      // let pos = getNewAsteroidPosition(bicho.position.x, bicho.position.z)
+      // asteroids_anchor[i].position.set(pos[0], 150, pos[1])
+      // asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0, - Math.random()*100, 0))
+      // asteroids_anchor[i].angularVelocity.set(0, 0, 0)  
+    }
+  }
+
+  mixers.forEach(function(mixer) {
+      mixer.update(delta);
+  });
+
+  mixers_asteroid.forEach(function(mixer) {
+    mixer.update(delta);
+  });
+  renderer.render(scene, camera);
 }
 
 function render()
-{
-	requestAnimationFrame( render );
-	update();
-	renderer.render( scene, camera );
+{ 
+    requestAnimationFrame(render);
+    update();
+    update_animation();
+    
+    renderer.render(scene,camera); 
 }

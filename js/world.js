@@ -6,6 +6,7 @@ import Stats from "../lib/stats.module.js";
 
 
 let running = false
+let mixers_asteroid = []
 
 let light;
 let GlobalTimer = 0;
@@ -90,7 +91,7 @@ function gameOver(){
       asteroids_anchor[i].angularDamping = 0.9
       asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0,  Math.random()*300, 0))
       let pos = relocateTreePosition(bicho.position.x, bicho.position.z)
-      asteroids_anchor[i].position.set(pos[0], 500, pos[1])
+      asteroids_anchor[i].position.set(pos[0], 50, pos[1])
     }
 
 
@@ -206,6 +207,9 @@ function init()
   document.getElementById('restart-button').onclick = () =>{
     running = true
     GOPanel.style.display  = 'none'
+    levellogger.innerText = level
+    recordlogger.innerText = record
+    
     render()
   };
 
@@ -285,14 +289,30 @@ function getNewRewardPosition ( x, z){
   return [nx, nz]
 }
 
-function getNewAsteroidPosition ( x, z){
+function getNewAsteroidPosition ( x, z, index){
 
   let nx, nz  
   [nx, nz] = [x, z]
 
   nx = x + avelrange - Math.floor(Math.random() * avelrange*2);
   nz = z + avelrange - Math.floor(Math.random() * avelrange*2);
-  
+
+  let desp = false
+  while(true){
+    for(let i = 0; i < amountasteroids; i++){
+      if(i == index)
+       continue;
+
+      if(Math.hypot(asteroids_anchor[i].position.x - nx, asteroids_anchor[i].position.z - nz) < 4)
+        desp = true
+    }
+    if(!desp)
+    break
+    nx += 1
+    nz += 1
+    desp = false
+    console.log('start moved')
+  }
   return [nx, nz]
 }
 
@@ -339,18 +359,28 @@ function createAsteroids ( ){
 
   let model;
   const loader = new GLTFLoader()
-    loader.load( 'models/meteorite/scene.gltf', function ( gltf ) {
+    loader.load( 'models/energy_sphere/scene.gltf', function ( gltf ) {
 
-        model = gltf.scene
+        const model = SkeletonUtils.clone(gltf.scene)
+        model.scale.set(4, 4, 4)
+
+        const clip = THREE.AnimationClip.findByName(gltf.animations, 'Take 001');
+        
+
         let pos
         for(var i = 0; i < amountasteroids; i++){
           
           // asteroids.push(new THREE.Mesh( new THREE.BoxGeometry(10,10, 10)))
           // asteroids[i].add(model.clone())
           asteroids.push(model.clone())
+          const mixer = new THREE.AnimationMixer(asteroids[i]);
+          const action = mixer.clipAction(clip);
+          action.play();
+          mixers_asteroid.push(mixer)
+
           timeGround.push(-1)
           asteroids_anchor.push(new CANNON.Body({ 
-                            shape: new CANNON.Box(new CANNON.Vec3(5,5,5)),
+                            shape: new CANNON.Sphere(4),
                             mass: 1e-4, 
                             // material: asteroidsMaterial,
                           }))
@@ -363,7 +393,7 @@ function createAsteroids ( ){
           asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0,  Math.random()*300, 0))
           
           pos = relocateTreePosition(0, 0)//[0, 0]
-          asteroids_anchor[i].position.set(pos[0], 500, pos[1])
+          asteroids_anchor[i].position.set(pos[0], 60, pos[1])
 
           scene.add(asteroids[i])
           world.addBody(asteroids_anchor[i])
@@ -654,11 +684,10 @@ function update(){
 
   for(let i = 0; i < asteroids_anchor.length; i++){
       asteroids[i].position.copy(asteroids_anchor[i].position);
-      
-      asteroids[i].position.set(asteroids_anchor[i].position.x-1, asteroids_anchor[i].position.y-3, asteroids_anchor[i].position.z-6)
-      // asteroids[i].quaternion.copy( asteroids_anchor[i].quaternion );
+      asteroids[i].position.set(asteroids_anchor[i].position.x, asteroids_anchor[i].position.y, asteroids_anchor[i].position.z)
+      asteroids[i].quaternion.copy( asteroids_anchor[i].quaternion );
 
-      if(asteroids_anchor[i].position.y < 8 && timeGround[i] > 1e-3 && squaredDistance(asteroids_anchor[i].position) < 10**2)
+      if(asteroids[i].position.y < 8 && timeGround[i] > 1e-3 && squaredDistance(asteroids[i].position) < 8**2)
       gameOver();
   }  
 }
@@ -673,7 +702,7 @@ function updateAspectRatio()
 
 }
 function squaredDistance(b) {
-  return (bicho.position.x - b.x + 1 )**2 + (bicho.position.y - b.y + 3)**2 +(bicho.position.z - b.z + 6)**2
+  return (bicho.position.x - b.x)**2 + (bicho.position.y - b.y)**2 +(bicho.position.z - b.z)**2
 }
 
 function update_animation(time){
@@ -684,7 +713,7 @@ function update_animation(time){
   const delta = clock.getDelta();
   GlobalTimer += delta
 
-  if(Math.floor(GlobalTimer/30) < Math.floor((GlobalTimer + delta)/30) ){
+  if(Math.floor(GlobalTimer/10) < Math.floor((GlobalTimer + delta)/10) ){
     avelrange = Math.max(50, avelrange-20)
     scoremMltiplier ++
     level ++;
@@ -695,20 +724,22 @@ function update_animation(time){
   
   for(let i = 0; i < asteroids_anchor.length; i++){
 
-    if(asteroids_anchor[i].position.y < 6 && timeGround[i] == -1){
+    if(asteroids_anchor[i].position.y <= 4 && timeGround[i] == -1){
       timeGround[i] = delta
+      asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0,  0, 0))
     }
-    else if(asteroids_anchor[i].position.y < 6){
+    else if(asteroids_anchor[i].position.y <= 4){
       timeGround[i] += delta
+      asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0,  0, 0))
 
-      if(squaredDistance(asteroids_anchor[i].position) < 10**2)
+      if(squaredDistance(asteroids_anchor[i].position) < 4.2**2)
         console.log('murio')
     }
     
     if(timeGround[i] > resetime){
       timeGround[i] = -1
-      let pos = getNewAsteroidPosition(bicho.position.x, bicho.position.z)
-      asteroids_anchor[i].position.set(pos[0], 150, pos[1])
+      let pos = getNewAsteroidPosition(bicho.position.x, bicho.position.z,i)
+      asteroids_anchor[i].position.set(pos[0], 50, pos[1])
       asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0, - Math.random()*100, 0))
       asteroids_anchor[i].angularVelocity.set(0, 0, 0)  
     }
@@ -717,6 +748,11 @@ function update_animation(time){
   mixers.forEach(function(mixer) {
       mixer.update(delta);
   });
+
+  mixers_asteroid.forEach(function(mixer) {
+    mixer.update(delta);
+  });
+
   renderer.render(scene, camera);
 }
 

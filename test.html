@@ -1,31 +1,129 @@
-<!doctype html>
-<!-- 
-  Ejemplos sobre Three.js : Cubo texturado animado
-   	Cubo con color por vertice y mapa uv sobre textura en cruz;
-   	Util para comprobar si funciona Threejs sobre el navegador.
-  rvivo@upv.es 2022
+<!DOCTYPE html>
+<!--
+    Pagina de carga de una aplicacin basica en Threejs
 -->
+
 <html lang="es">
-	<head>
-		<meta charset='utf-8'>
-		<title>Threejs App</title>
-		<style>
-			body {
-				background-color: #000;
-				margin: 0px;
-				overflow: hidden;
-			}
-		</style>
-	</head>
-	<body>
-		<!-- Contenedor del app -->
-		<div id="container"></div>
+    <head>
+        <meta charset="utf-8">
+        <title> Hungry Rabbit </title>
+        <style>
+            body{ background-color: rgb(94, 93, 93);
+                  margin: 0px;
+                  overflow: hidden;
+                }
+            #info{
+                position: absolute;
+                left: 2px;
+                width: 120px;
+                text-align: left;
+                z-index: 1;
+                background-color: rgb(153, 167, 175);
+                padding: 0.5rem;
+                border: 2px solid rgb(29, 68, 105);
+                font-family: monospace;
+            }    
+            #score-row{
+              display: flex;
+            }
+            .divider{
+              height: 2px;
+              width: 100%;
+              background-color: rgb(29, 68, 105);;
+              margin: 0.5rem 0 ;
+            }
+            
+            #info #title{
+              font-weight: bold;
+            }
+            #game-over-panel,
+            #intro-panel{
+              display: grid;
+              place-items: center;
+              position: absolute;
+              top: 0;
+              right: 0;
+              bottom: 0;
+              left: 0;
+              background-color: rgb(94, 93, 93);
+              color: white;
+              font-family: monospace;
+              z-index: 10; 
+            }
+            #game-over-panel{
+              display: none;
+            }
 
-		<!-- Scripts de biblioteca -->
-		<script src="lib/three.min_r140.js"></script>
-		<script src="lib/OrbitControls.js"></script>
 
-		<script src="js/test.js"></script>
+            #game-over-column,
+            #intro-column{
+              text-align: center;
+            }
+            #game-over-title,
+            #intro-title{
+              font-size: 3em;
+              margin-bottom: 3em;
+            }
 
-	</body>
+            #restart-button,
+            #start-button{
+              background-color: rgb(153, 167, 175);
+              color: white;
+              font-family: monospace;
+              font-size: 1.5em;
+              border: 1px solid white;
+              padding: 0.5rem;
+              cursor: pointer;
+            }
+            #restart-button,
+            #start-button:hover{
+              background-color: rgb(122, 139, 150);;
+            }
+
+            #game-over-score-row{
+              display: flex;
+              justify-content: center;
+              margin-bottom: 1rem;
+              font-size: 1.5rem;
+
+            }
+        </style>
+      </head>
+    <body>
+        <div id="info">
+          <div id="title"> Hungry Rabbit </div>
+          <div class="divider"></div>
+          <div id="score-row">Score: <div id="score"></div></div>
+          <div id="score-row">Level: <div id="level"></div></div>
+          <div id="divider"></div>
+        </div>
+        
+
+        <!-- <div id="intro-panel">
+          <div id="intro-column">
+            <div id="intro-title"> Hungry Rabbit</div>
+            <button id="start-button">Start</button>
+          </div>
+        </div> -->
+
+        <div id="game-over-panel">
+          <div id="game-over-column">
+            <div id="game-over-title"> Rabbit Dead :(</div>
+            
+            <div id="game-over-score-row">Score: <div id="game-over-score"></div></div>
+            <div id="game-over-score-row">Level: <div id="game-over-level"></div></div>
+          
+            <button id="restart-button"> Restart </button>
+          </div>
+        </div>
+
+        <div id="container"></div>
+        <!-- Declaracion del espacio de nombres de Threejs -->
+        <script type="importmap">
+            { "imports": { "three": "./lib/three.module.js" } }
+        </script>
+        
+        <!-- mi script -->
+        <script type="module" src="js/test.js"></script>
+    </body>
 </html>
