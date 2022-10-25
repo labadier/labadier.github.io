@@ -687,7 +687,7 @@ function update(){
       asteroids[i].position.set(asteroids_anchor[i].position.x, asteroids_anchor[i].position.y, asteroids_anchor[i].position.z)
       asteroids[i].quaternion.copy( asteroids_anchor[i].quaternion );
 
-      if(asteroids[i].position.y < 8 && timeGround[i] > 1e-3 && squaredDistance(asteroids[i].position) < 8**2)
+      if(asteroids[i].position.y < 8 && timeGround[i] > 1e-3 && squaredDistance(asteroids[i].position) < 7**2)
       gameOver();
   }  
 }

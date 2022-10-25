@@ -6,7 +6,6 @@ import Stats from "../lib/stats.module.js";
 
 
 let running = true
-
 let mixers_asteroid = []
 
 let light;
@@ -20,9 +19,9 @@ let stats;
 let renderer, scene, camera, bicho, goal, keys, sky, coins = []
 let asteroids = [], asteroids_anchor = [];
 let mixers = [], clock, clips, isIdle, bicho_actions = {}, trees = []
-const amountreward = 150
-const amounttrees = 60
-const amountasteroids = 1
+const amountreward = 0 //150
+const amounttrees = 0 // 60 
+const amountasteroids = 0// 20
 const lim = 600, continouosFloor = new Array(3)
 
 let centerChanged = true
@@ -51,21 +50,59 @@ loadScene();
 loadPhysicalWorld();
 render();
 
-function detectCollisionCubes(object1, object2){
+function gameOver(){
 
-  console.log(object1)
-  object1.geometry.computeBoundingBox(); //not needed if its already calculated
-  object2.geometry.computeBoundingBox();
-  object1.updateMatrixWorld();
-  object2.updateMatrixWorld();
+  GOrecordlogger.innerText = record
+  GOlevellogger.innerText = level
+
+  running = false
+  GlobalTimer = 0
+  avelrange = 200
+  resetime = 4
+
+  keys = {
+    a: false,
+    s: false,
+    d: false,
+    w: false
+  };
+  scoremMltiplier = 1
+  level = 0 
+  backwalk = 0
+  record = 0
+  dir = new THREE.Vector3;
+  velocity = speed = 0.0;
+
+
+  isIdle = true
+  centerChanged = true
+
+  setTimeout(() =>{
+
+    for(var i = 0; i < amountreward; i++){
+        
+      let pos = getNewRewardPosition(0, 0)
+      coins[i].position.set(pos[0], 2, pos[1])
+    }
+
+    for(var i = 0; i < amountasteroids; i++){
+    
+      timeGround[i] =-1
+      asteroids_anchor[i].angularDamping = 0.9
+      asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0,  Math.random()*300, 0))
+      let pos = relocateTreePosition(bicho.position.x, bicho.position.z)
+      asteroids_anchor[i].position.set(pos[0], 50, pos[1])
+    }
+
+
+    GOPanel.style.display = 'grid'
+
+    const clip = THREE.AnimationClip.findByName(clips, 'Armature|Idle  ');
+    mixers[0].stopAllAction()
+    const action = mixers[0].clipAction(clip);
+    action.play();
+  }, 1000)
   
-  var box1 = object1.geometry.boundingBox.clone();
-  box1.applyMatrix4(object1.matrixWorld);
-
-  var box2 = object2.geometry.boundingBox.clone();
-  box2.applyMatrix4(object2.matrixWorld);
-
-  console.log(box1.intersectsBox(box2));
 }
 
 function addLighting(scene) {
@@ -75,11 +112,7 @@ function addLighting(scene) {
   lightPosition.set(300, 800, 300);
   // light.position.set(300, 400, 300);
 
-  light.shadow.camera.top = 2*visionrange;
-  light.shadow.camera.left = -2*visionrange;
   light.shadow.camera.far = 1800;
-  light.shadow.camera.right = 2*visionrange;
-  light.shadow.camera.bottom = -2*visionrange;
   light.shadow.penumbra = 0.5
   light.castShadow = true;
 
@@ -90,8 +123,8 @@ function addLighting(scene) {
 
   scene.add(light);
   scene.add( light.target )
-  scene.add(ambientLight);
-  // scene.add(new THREE.CameraHelper(light.shadow.camera))
+  // scene.add(ambientLight);
+  scene.add(new THREE.CameraHelper(light.shadow.camera))
 }
 
 function init()
@@ -127,9 +160,9 @@ function init()
 
   // Instanciar la camara
   camera= new THREE.PerspectiveCamera(90 ,window.innerWidth/window.innerHeight,1,visionrange*5);
-  // camera.position.set(15, 15, 3);
-  camera.position.set(20, 10, 3);
-  // camera.position.set(300, 450, 500);
+  camera.position.set(15, 15, 3);
+  // camera.position.set(30, 2, 3);
+  camera.position.set(800, 800, 800);
   
   camera.lookAt(0,0,0);
   // camera.lookAt(0,20,0);
@@ -159,17 +192,8 @@ function init()
     if ( keys[ key ] !== undefined )
       keys[ key ] = false;
     
-  }); 
+  });
 
-  recordlogger = document.getElementById('score')
-  levellogger = document.getElementById('level')
-  recordlogger.innerText = record
-  levellogger.innerText = level
-
-
-  GOrecordlogger = document.getElementById('game-over-score')
-  GOlevellogger = document.getElementById('game-over-level')
-  GOPanel =  document.getElementById('game-over-panel')
   
   window.addEventListener('resize', updateAspectRatio );
 }
@@ -204,7 +228,7 @@ function createContinuousFloor(){
   continouosFloor[1][1].rotation.x = -Math.PI/2;
   continouosFloor[1][1].receiveShadow = true;
 
-  // scene.add(continouosFloor[1][1]);
+  scene.add(continouosFloor[1][1]);
   
   const mf = [-1, -1, -1, 0, 0, 1, 1, 1]
   const mc = [-1, 0, 1, -1, 1, -1, 0, 1]
@@ -219,7 +243,7 @@ function createContinuousFloor(){
     continouosFloor[nf][nc].position.x = -lim*mf[i]
     continouosFloor[nf][nc].position.z = lim*mc[i]
         
-    // scene.add(continouosFloor[nf][nc])
+    scene.add(continouosFloor[nf][nc])
   } 
 }
 
@@ -237,14 +261,30 @@ function getNewRewardPosition ( x, z){
   return [nx, nz]
 }
 
-function getNewAsteroidPosition ( x, z){
+function getNewAsteroidPosition ( x, z, index){
 
   let nx, nz  
   [nx, nz] = [x, z]
 
   nx = x + avelrange - Math.floor(Math.random() * avelrange*2);
   nz = z + avelrange - Math.floor(Math.random() * avelrange*2);
-  
+
+  let desp = false
+  while(true){
+    for(let i = 0; i < amountasteroids; i++){
+      if(i == index)
+       continue;
+
+      if(Math.hypot(asteroids_anchor[i].position.x - nx, asteroids_anchor[i].position.z - nz) < 4)
+        desp = true
+    }
+    if(!desp)
+    break
+    nx += 1
+    nz += 1
+    desp = false
+    console.log('start moved')
+  }
   return [nx, nz]
 }
 
@@ -279,7 +319,7 @@ function createRewards ( ){
           coins.push(model.clone())
           pos = getNewRewardPosition(0, 0)
           coins[i].position.set(pos[0], 2, pos[1])
-          // scene.add(coins[i])
+          scene.add(coins[i])
         }
                       
       }, undefined, function(error) {
@@ -294,22 +334,17 @@ function createAsteroids ( ){
     loader.load( 'models/energy_sphere/scene.gltf', function ( gltf ) {
 
         const model = SkeletonUtils.clone(gltf.scene)
-        model.scale.set(3.5, 3.5, 3.5)
-        
-        
+        model.scale.set(4, 4, 4)
+
         const clip = THREE.AnimationClip.findByName(gltf.animations, 'Take 001');
-        const puntual = new THREE.PointLight(0xFFFFFF,1);
-        puntual.position.set(0,3.5,0);
-        scene.add(puntual);
         
-        
-       
+
+        let pos
         for(var i = 0; i < amountasteroids; i++){
           
           // asteroids.push(new THREE.Mesh( new THREE.BoxGeometry(10,10, 10)))
           // asteroids[i].add(model.clone())
           asteroids.push(model.clone())
-
           const mixer = new THREE.AnimationMixer(asteroids[i]);
           const action = mixer.clipAction(clip);
           action.play();
@@ -317,7 +352,7 @@ function createAsteroids ( ){
 
           timeGround.push(-1)
           asteroids_anchor.push(new CANNON.Body({ 
-                            shape: new CANNON.Sphere(3.5),
+                            shape: new CANNON.Sphere(4),
                             mass: 1e-4, 
                             // material: asteroidsMaterial,
                           }))
@@ -327,9 +362,10 @@ function createAsteroids ( ){
           asteroids_anchor[i].angularDamping = 0.9
           // asteroids_anchor[i].lienarDamping = 0.9
 
-          asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0,  -Math.random()*10, 0))
-           
-          asteroids_anchor[i].position.set(0, 20 ,0)
+          asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0,  Math.random()*300, 0))
+          
+          pos = relocateTreePosition(0, 0)//[0, 0]
+          asteroids_anchor[i].position.set(pos[0], 60, pos[1])
 
           scene.add(asteroids[i])
           world.addBody(asteroids_anchor[i])
@@ -365,7 +401,7 @@ function createTrees ( ){
           trees.push(model.clone())
           pos = getNewRewardPosition(0, 0)
           trees[trees.length - 1].position.set(pos[0], 0, pos[1])
-          // scene.add(trees[trees.length - 1])
+          scene.add(trees[trees.length - 1])
         }
                       
       }, undefined, function(error) {
@@ -544,7 +580,7 @@ function update(){
       bicho.rotateY(Math.PI)
       backwalk ^= 1
     }
-    speed = 0.2;
+    speed = 5;
     // speed = 0.07;
   }
   else if ( keys.s ){
@@ -620,15 +656,12 @@ function update(){
 
   for(let i = 0; i < asteroids_anchor.length; i++){
       asteroids[i].position.copy(asteroids_anchor[i].position);
-      
-      // asteroids[i].position.set(asteroids_anchor[i].position.x-1, asteroids_anchor[i].position.y-3, asteroids_anchor[i].position.z-6)
-      // asteroids[i].quaternion.copy( asteroids_anchor[i].quaternion );
+      asteroids[i].position.set(asteroids_anchor[i].position.x, asteroids_anchor[i].position.y, asteroids_anchor[i].position.z)
+      asteroids[i].quaternion.copy( asteroids_anchor[i].quaternion );
 
-      // if(asteroids[i].position.y < 8 && timeGround[i] > 1e-3 && squaredDistance(asteroids[i].position) < 10**2)
-      // gameOver();
-      // detectCollisionCubes(asteroids[i], bicho)
+      if(asteroids[i].position.y < 8 && timeGround[i] > 1e-3 && squaredDistance(asteroids[i].position) < 7**2)
+      gameOver();
   }  
-  
 }
 
 function updateAspectRatio()
@@ -641,7 +674,7 @@ function updateAspectRatio()
 
 }
 function squaredDistance(b) {
-  return (bicho.position.x - b.x + 1 )**2 + (bicho.position.y - b.y + 3)**2 +(bicho.position.z - b.z + 6)**2
+  return (bicho.position.x - b.x)**2 + (bicho.position.y - b.y)**2 +(bicho.position.z - b.z)**2
 }
 
 function update_animation(time){
@@ -652,7 +685,7 @@ function update_animation(time){
   const delta = clock.getDelta();
   GlobalTimer += delta
 
-  if(Math.floor(GlobalTimer/30) < Math.floor((GlobalTimer + delta)/30) ){
+  if(Math.floor(GlobalTimer/10) < Math.floor((GlobalTimer + delta)/10) ){
     avelrange = Math.max(50, avelrange-20)
     scoremMltiplier ++
     level ++;
@@ -663,22 +696,24 @@ function update_animation(time){
   
   for(let i = 0; i < asteroids_anchor.length; i++){
 
-    if(asteroids_anchor[i].position.y < 6 && timeGround[i] == -1){
+    if(asteroids_anchor[i].position.y <= 4 && timeGround[i] == -1){
       timeGround[i] = delta
+      asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0,  0, 0))
     }
-    else if(asteroids_anchor[i].position.y < 6){
+    else if(asteroids_anchor[i].position.y <= 4){
       timeGround[i] += delta
+      asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0,  0, 0))
 
-      if(squaredDistance(asteroids_anchor[i].position) < 10**2)
+      if(squaredDistance(asteroids_anchor[i].position) < 4.2**2)
         console.log('murio')
     }
     
     if(timeGround[i] > resetime){
       timeGround[i] = -1
-      // let pos = getNewAsteroidPosition(bicho.position.x, bicho.position.z)
-      // asteroids_anchor[i].position.set(pos[0], 150, pos[1])
-      // asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0, - Math.random()*100, 0))
-      // asteroids_anchor[i].angularVelocity.set(0, 0, 0)  
+      let pos = getNewAsteroidPosition(bicho.position.x, bicho.position.z,i)
+      asteroids_anchor[i].position.set(pos[0], 50, pos[1])
+      asteroids_anchor[i].velocity.copy(new CANNON.Vec3(0, - Math.random()*100, 0))
+      asteroids_anchor[i].angularVelocity.set(0, 0, 0)  
     }
   }
 
@@ -689,11 +724,13 @@ function update_animation(time){
   mixers_asteroid.forEach(function(mixer) {
     mixer.update(delta);
   });
+
   renderer.render(scene, camera);
 }
 
 function render()
-{ 
+{
+
     requestAnimationFrame(render);
     update();
     update_animation();
