@@ -21,7 +21,7 @@ let asteroids = [], asteroids_anchor = [];
 let mixers = [], clock, clips, isIdle, bicho_actions = {}, trees = []
 const amountreward = 0 //150
 const amounttrees = 0 // 60 
-const amountasteroids = 0// 20
+const amountasteroids =  20
 const lim = 600, continouosFloor = new Array(3)
 
 let centerChanged = true
@@ -123,8 +123,8 @@ function addLighting(scene) {
 
   scene.add(light);
   scene.add( light.target )
-  // scene.add(ambientLight);
-  scene.add(new THREE.CameraHelper(light.shadow.camera))
+  scene.add(ambientLight);
+  // scene.add(new THREE.CameraHelper(light.shadow.camera))
 }
 
 function init()

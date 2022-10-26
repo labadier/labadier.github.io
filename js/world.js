@@ -713,7 +713,7 @@ function update_animation(time){
   const delta = clock.getDelta();
   GlobalTimer += delta
 
-  if(Math.floor(GlobalTimer/10) < Math.floor((GlobalTimer + delta)/10) ){
+  if(Math.floor(GlobalTimer/30) < Math.floor((GlobalTimer + delta)/30) ){
     avelrange = Math.max(50, avelrange-20)
     scoremMltiplier ++
     level ++;
